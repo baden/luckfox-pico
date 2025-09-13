@@ -126,7 +126,7 @@ else
 endif
 
 ifneq ($(findstring $(TARGET_ROOTFS),custom),)
-   ROOTFS_BUILD_ENV := custom drv 
+   ROOTFS_BUILD_ENV := custom drv
 else ifneq ($(findstring $(TARGET_ROOTFS),buildroot),)
    ROOTFS_BUILD_ENV := rootfs_prepare pctools buildroot boardtools drv
  else #busybox
@@ -281,7 +281,7 @@ BUSYBOX_DIR := $(SYSDRV_DIR)/source/busybox
 SYSDRV_BUSYBOX_OBJS_OUTPUT_DIR ?= $(BUSYBOX_DIR)/objs_$(BUSYBOX_CFG)
 
 BUILDROOT_CFG ?= config_normal
-BUILDROOT_VER ?= buildroot-2023.02.6
+BUILDROOT_VER ?= buildroot-2025.08
 BUILDROOT_DIR := $(SYSDRV_DIR)/source/buildroot
 
 CUSTOM_VER ?= custom
@@ -591,7 +591,7 @@ buildroot_menuconfig:
 
 buildroot_savedefconfig:
 	@echo -e "$(C_GREEN) ==sysdrv== buildroot savedefconfig   $(C_NORMAL)"
-	$(MAKE) savedefconfig -C $(BUILDROOT_DIR)/$(BUILDROOT_VER) 
+	$(MAKE) savedefconfig -C $(BUILDROOT_DIR)/$(BUILDROOT_VER)
 
 buildroot_create:
 	@echo -e "$(C_GREEN) ==sysdrv== buildroot create   $(C_NORMAL)"
@@ -624,10 +624,10 @@ buildroot: prepare
 		cp ${BUSYBOX_PATCH_PATH}/0010-halt-Support-rebooting-with-arg.patch $(BUILDROOT_DIR)/$(BUILDROOT_VER)/package/busybox/ ;\
 	);
 
-	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) $(BUILDROOT_DEFCONFIG) -C $(BUILDROOT_DIR)/$(BUILDROOT_VER) 
+	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) $(BUILDROOT_DEFCONFIG) -C $(BUILDROOT_DIR)/$(BUILDROOT_VER)
 	$(SYSDRV_DIR)/tools/board/mirror_select/buildroot_mirror_select.sh $(BUILDROOT_DIR)/$(BUILDROOT_VER)/.config
-	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) source -C $(BUILDROOT_DIR)/$(BUILDROOT_VER) 
-	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) -j$(SYSDRV_JOBS) -C $(BUILDROOT_DIR)/$(BUILDROOT_VER) 
+	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) source -C $(BUILDROOT_DIR)/$(BUILDROOT_VER)
+	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) -j$(SYSDRV_JOBS) -C $(BUILDROOT_DIR)/$(BUILDROOT_VER)
 
 ifeq ($(SYSDRV_BUILD_RAMDISK_FLAG),YES)
     tar xf $(SYSDRV_DIR)/tools/board/rootfs_script.tar -C $(BUILDROOT_DIR)/$(BUILDROOT_VER)/output/target
@@ -645,7 +645,7 @@ else
 endif
 
 buildroot_clean:
-	$(AT)rm -rf $(BUILDROOT_DIR)/$(BUILDROOT_VER) 
+	$(AT)rm -rf $(BUILDROOT_DIR)/$(BUILDROOT_VER)
 
 ##########################################################################################
 #   build custom
