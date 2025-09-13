@@ -76,7 +76,7 @@ __insmod mpp_vcodec.ko
 __insmod rknpu.ko
 __insmod snd-soc-rv1106.ko
 
-__insmod motor.ko
+#__insmod motor.ko
 
 __chk_camera_sensor_height
 
@@ -87,4 +87,4 @@ __insmod rve.ko
 udevadm control --start-exec-queue
 
 # insmod wifi driver background
-$(pwd)/insmod_wifi.sh &
+#$(pwd)/insmod_wifi.sh &
