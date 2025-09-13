@@ -90,7 +90,7 @@
 
 &usbdrd_dwc3 {
 	status = "okay";
-	dr_mode = "peripheral";
+	dr_mode = "host";
 };
 
 /**********SPI**********/
@@ -117,8 +117,17 @@
 	clock-frequency = <100000>;
 };
 
+&i2c4 {
+	status = "okay";
+	clock-frequency = <100000>;
+	pinctrl-0 = <&i2c4m0_xfer>; /* 2A0, 2A1 */
+	pinctrl-names = "default";
+};
 
 /**********UART**********/
+&uart1 {
+	status = "okay";
+};
 /* UART3_M1 */
 &uart3 {
 	status = "disabled";
@@ -128,6 +137,30 @@
 &uart4 {
 	status = "disabled";
 };
+
+/**** PWM *****/
+&pwm2 {
+    status = "okay";
+    //pinctrl-names = "active";
+};
+
+&pwm4 {
+    status = "okay";
+    //pinctrl-names = "active";
+};
+
+&pwm5 {
+    status = "okay";
+    //pinctrl-names = "active";
+    pinctrl-0 = <&pwm5m2_pins>;
+};
+
+&pwm6 {
+    status = "okay";
+    //pinctrl-names = "active";
+    pinctrl-0 = <&pwm6m2_pins>;
+};
+
 
 /**********RTC**********/
 &rtc {
