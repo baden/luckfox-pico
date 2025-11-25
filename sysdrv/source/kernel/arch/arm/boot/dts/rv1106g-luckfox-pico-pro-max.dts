@@ -117,12 +117,13 @@
 	clock-frequency = <100000>;
 };
 
-&i2c4 {
-	status = "okay";
-	clock-frequency = <100000>;
-	pinctrl-0 = <&i2c4m0_xfer>; /* 2A0, 2A1 */
-	pinctrl-names = "default";
-};
+// TODO: Цей i2c керує камерою. Треба знайти інший.
+//&i2c4 {
+//	status = "okay";
+//	clock-frequency = <100000>;
+//	pinctrl-0 = <&i2c4m0_xfer>; /* 2A0, 2A1 */
+//	pinctrl-names = "default";
+//};
 
 /**********UART**********/
 &uart1 {
