@@ -1,0 +1,5 @@
+config BR2_PACKAGE_GSTREAMER_ROCKCHIP_MPP
+    bool "GStreamer Rockchip MPP Plugin"
+    depends on BR2_PACKAGE_GSTREAMER1
+    help
+      GStreamer plugin for Rockchip MPP (RV1106)
