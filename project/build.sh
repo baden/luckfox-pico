@@ -354,7 +354,7 @@ function choose_target_board() {
 function build_select_board() {
 	RK_TARGET_BOARD_ARRAY=($(
 		cd ${TARGET_PRODUCT_DIR}/
-		ls BoardConfig_*/BoardConfig*.mk | sort 
+		ls BoardConfig_*/BoardConfig*.mk | sort
 	))
 
 	RK_TARGET_BOARD_ARRAY_LEN=${#RK_TARGET_BOARD_ARRAY[@]}
@@ -2147,9 +2147,9 @@ function __GET_TARGET_PARTITION_FS_TYPE() {
 }
 
 __GET_BOOTARGS_FROM_BOARD_CFG() {
-	if [ -n "$RK_BOOTARGS_CMA_SIZE" ]; then
-		SYS_BOOTARGS="$SYS_BOOTARGS rk_dma_heap_cma=$RK_BOOTARGS_CMA_SIZE"
-	fi
+	#if [ -n "$RK_BOOTARGS_CMA_SIZE" ]; then
+		SYS_BOOTARGS="$SYS_BOOTARGS rk_dma_heap_cma=40M"
+	#fi
 }
 
 __LINK_DEFCONFIG_FROM_BOARD_CFG() {
