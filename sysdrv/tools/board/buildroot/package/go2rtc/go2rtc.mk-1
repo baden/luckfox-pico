@@ -1,0 +1,17 @@
+# package/go2rtc/go2rtc.mk
+#############################################################
+#
+# go2rtc
+#
+#############################################################
+# Replace with the current version/commit hash
+GO2RTC_VERSION = 1.9.12
+GO2RTC_SITE = $(call github,AlexxIT,go2rtc,v$(GO2RTC_VERSION))
+# GO2RTC_VERSION = 2dc0d58ba73f349e7ff28156068788bc5f99037f
+# GO2RTC_SITE = https://github.com/AlexxIT/go2rtc.git
+GO2RTC_SITE_METHOD = git
+GO2RTC_GOBIN_INSTALL_TARGET = yes
+GO2RTC_PACKAGE_DIR = pkg/go2rtc
+
+# Inherit the generic Go package infrastructure
+$(eval $(golang-package))

@@ -1,0 +1,9 @@
+config BR2_PACKAGE_GO2RTC
+	bool "go2rtc"
+	depends on BR2_PACKAGE_HOST_GO_TARGET_ARCH_SUPPORTS
+	select BR2_PACKAGE_HOST_GO
+	help
+	  Ultimate camera streaming server with support of
+	  RTSP, RTMP, HTTP-FLV, WebRTC, MSE, HLS, MP4, JPEG.
+
+	  https://github.com/AlexxIT/go2rtc

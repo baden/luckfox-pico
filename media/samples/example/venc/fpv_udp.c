@@ -46,6 +46,11 @@ extern "C" {
 
 /*
 
+Не треба все перезбирати та прошивати. Достатнь зібрати тільки media та завантажити fpv_udp.
+
+./build.sh media
+scp output/out/media_out/bin/fpv_udp root@192.168.3.117:/oem/usr/bin/
+
 Як цим користуватися:
 
 1. Запустить це на пристрої Rockchip з камерою.
@@ -67,6 +72,129 @@ streams:
 Для нього додан стрім luckfox_local. Він універсальний для H.264 та H.265.
 
 sample_vi_vpss_osd_venc -w 1920 -h 1080 -a /etc/iqfiles/ -I 0 -e h264cbr -b 2048 -i /usr/share/image.bmp -o /data/
+
+
+Які ще приклади працюють, з яких можна витягти шось корисне:
+ - sample_demo_vi_venc -w 1920 -h 1080 -a /etc/iqfiles/ -l -1
+
+
+
+Шо з потенційно цікавого на цьому прикладі:
+
+go2rtc config.yaml для прийому UDP-потоку:
+
+streams:
+  doorbell: exec:ffmpeg -hide_banner -v error -fflags nobuffer -flags low_delay -fflags +genpts+discardcorrupt -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_transport udp -use_wallclock_as_timestamps 1  -strict experimental -i rtsp://192.168.3.117:554/live/0 -c copy -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}
+  luckfox_local: rtsp://192.168.3.117/live/0
+
+
+[INFO  rtsp_demo.c:408:rtsp_new_client_connection] new rtsp client 192.168.3.98:55075 comming
+[DEBUG rtsp_msg.c:865:rtsp_msg_parse_from_array]
+OPTIONS rtsp://192.168.3.117:554/live/0 RTSP/1.0
+CSeq: 1
+User-Agent: go2rtc/ffmpeg
+
+[DEBUG rtsp_demo.c:725:rtsp_handle_OPTIONS]
+[DEBUG rtsp_msg.c:998:rtsp_msg_build_to_array]
+RTSP/1.0 200 OK
+CSeq: 1
+Date: Thu Nov 27 03:45:00 2025
+Public: OPTIONS, DESCRIBE, SETUP, PLAY, PAUSE, TEARDOWN
+Server: rtsp_demo
+
+[DEBUG rtsp_msg.c:865:rtsp_msg_parse_from_array]
+DESCRIBE rtsp://192.168.3.117:554/live/0 RTSP/1.0
+Accept: application/sdp
+CSeq: 2
+User-Agent: go2rtc/ffmpeg
+
+[DEBUG rtsp_demo.c:746:rtsp_handle_DESCRIBE]
+[DEBUG rtsp_msg.c:998:rtsp_msg_build_to_array]
+RTSP/1.0 200 OK
+CSeq: 2
+Date: Thu Nov 27 03:45:00 2025
+Server: rtsp_demo
+Content-Type: application/sdp
+Content-Length: 325
+
+v=0
+o=- 0 0 IN IP4 0.0.0.0
+s=rtsp_demo
+t=0 0
+a=control:rtsp://192.168.3.117:554/live/0
+a=range:npt=0-
+m=video 0 RTP/AVP 96
+c=IN IP4 0.0.0.0
+a=rtpmap:96 H264/90000
+a=fmtp:96 packetization-mode=1;sprop-parameter-sets=Z2QQKKwbGqB4Aiflm4CAgKAAAAMAIAAABlHhEI1A,aO88sA==
+a=control:rtsp://192.168.3.117:554/live/0/track1
+[DEBUG rtsp_msg.c:865:rtsp_msg_parse_from_array]
+SETUP rtsp://192.168.3.117:554/live/0/track1 RTSP/1.0
+Transport: RTP/AVP/UDP;unicast;client_port=11960-11961
+CSeq: 3
+User-Agent: go2rtc/ffmpeg
+
+[DEBUG rtsp_demo.c:950:rtsp_handle_SETUP]
+[INFO  rtsp_demo.c:907:rtsp_new_rtp_connection] new rtp over udp for video ssrc:22345678 local_port:49152-49153 peer_addr:192.168.3.98 peer_port:11960-11961
+[DEBUG rtsp_msg.c:998:rtsp_msg_build_to_array]
+RTSP/1.0 200 OK
+CSeq: 3
+Date: Thu Nov 27 03:45:00 2025
+Session: 12345678
+Transport: RTP/AVP;ssrc=22345678;unicast;client_port=11960-11961;server_port=49152-49153
+Server: rtsp_demo
+
+[DEBUG rtsp_msg.c:865:rtsp_msg_parse_from_array]
+PLAY rtsp://192.168.3.117:554/live/0 RTSP/1.0
+Range: npt=0.000-
+CSeq: 4
+User-Agent: go2rtc/ffmpeg
+Session: 12345678
+
+[DEBUG rtsp_demo.c:1037:rtsp_handle_PLAY]
+[DEBUG rtsp_msg.c:998:rtsp_msg_build_to_array]
+RTSP/1.0 200 OK
+CSeq: 4
+Date: Thu Nov 27 03:45:00 2025
+Session: 12345678
+Server: rtsp_demo
+
+
+
+Бо на luckfor_local, отак:
+
+[DEBUG rtsp_demo.c:950:rtsp_handle_SETUP]
+[INFO  rtsp_demo.c:894:rtsp_new_rtp_connection] new rtp over tcp for video ssrc:22345679 peer_addr:192.168.3.98 interleaved:0-1
+[DEBUG rtsp_msg.c:998:rtsp_msg_build_to_array]
+RTSP/1.0 200 OK
+CSeq: 2
+Date: Thu Nov 27 03:43:26 2025
+Session: 12345679
+Transport: RTP/AVP/TCP;ssrc=22345679;interleaved=0-1
+Server: rtsp_demo
+
+[DEBUG rtsp_msg.c:865:rtsp_msg_parse_from_array]
+PLAY rtsp://192.168.3.117/live/0 RTSP/1.0
+CSeq: 3
+Session: 12345679
+
+[DEBUG rtsp_demo.c:1037:rtsp_handle_PLAY]
+[DEBUG rtsp_msg.c:998:rtsp_msg_build_to_array]
+RTSP/1.0 200 OK
+CSeq: 3
+Date: Thu Nov 27 03:43:26 2025
+Session: 12345679
+Server: rtsp_demo
+
+
+І так теж спрацьовує:
+
+streams:
+  luckfox_local_udp: ffmpeg:rtsp://192.168.3.117:554/live/0#input=rtsp/udp
+
+
+
+До речі. Я зібрав go2rtc для Luckfox. Так шо його можна запускати і прям на неї.
 
 */
 
