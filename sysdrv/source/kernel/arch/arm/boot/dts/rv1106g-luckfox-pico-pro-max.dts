@@ -106,9 +106,12 @@
 
 /**********I2C**********/
 /* I2C3_M1 */
+/* I2C for OLED SSD1306. TODO: Test FBDEV over drivers/video/fbdev/ssd1307fb */
 &i2c3 {
-	status = "disabled";
+	status = "okay";
 	clock-frequency = <100000>;
+	pinctrl-0 = <&i2c3m0_xfer>; /* GPIO2_A6 (pin29), GPIO2_A7 (pin34) */
+	pinctrl-names = "default";
 };
 
 /* I2C1_M1 */
