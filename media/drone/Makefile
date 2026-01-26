@@ -68,11 +68,16 @@ drone-build:
 	@make -C $(CURRENT_DIR)/src;
 	@make -C $(CURRENT_DIR)/src install;
 	@mkdir -p $(DRONE_OUT_DIR)/etc/init.d
-	@cp -af $(CURRENT_DIR)/drone.init $(DRONE_OUT_DIR)/etc/init.d/S99drone
+	@cp -af $(CURRENT_DIR)/S10wireguard $(DRONE_OUT_DIR)/etc/init.d/
+	@cp -af $(CURRENT_DIR)/S99drone $(DRONE_OUT_DIR)/etc/init.d/
+	@mkdir -p $(DRONE_OUT_DIR)/etc/wireguard
+	@cp -af $(CURRENT_DIR)/wg0.conf $(DRONE_OUT_DIR)/etc/wireguard/
 	@mkdir -p $(DRONE_OUT_DIR)/usr/bin
 	@cp -af $(CURRENT_DIR)/setup_drone.sh $(DRONE_OUT_DIR)/usr/bin/
+	@cp -af $(CURRENT_DIR)/wireguard-setup.sh $(DRONE_OUT_DIR)/usr/bin/
+	@cp -af $(CURRENT_DIR)/generate-wg-keys.sh $(DRONE_OUT_DIR)/usr/bin/
 	@cp -af $(CURRENT_DIR)/drone.conf $(DRONE_OUT_DIR)/etc/
-	@echo "Installed drone service files with S99 startup"
+	@echo "Installed drone and wireguard service files (S10->WireGuard, S99->Drone)"
 
 clean:
 	@make -C $(CURRENT_DIR)/src clean

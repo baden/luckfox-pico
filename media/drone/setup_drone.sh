@@ -39,18 +39,42 @@ fi
 # Create necessary directories
 mkdir -p /var/run /var/log
 
+# Check WireGuard status
+echo "Checking WireGuard VPN status..."
+if [ -f "/etc/init.d/S10wireguard" ]; then
+    if /etc/init.d/S10wireguard status | grep -q "UP"; then
+        echo "✓ WireGuard VPN is running"
+    else
+        echo "⚠ WireGuard VPN is not running - starting it..."
+        /etc/init.d/S10wireguard start
+    fi
+else
+    echo "⚠ WireGuard service not found"
+fi
+
 echo "Drone application setup complete!"
 echo ""
-echo "To start drone application manually:"
-echo "  Init script: /etc/init.d/S99drone start"
-echo "  Direct: /usr/bin/drone &"
+echo "Service startup order:"
+echo "  1. S10wireguard - VPN setup (starts first)"
+echo "  2. S99drone     - Drone application (starts after VPN)"
 echo ""
-echo "To stop drone application manually:"
-echo "  Init script: /etc/init.d/S99drone stop"
-echo "  Kill: pkill drone"
+echo "To start services manually:"
+echo "  WireGuard: /etc/init.d/S10wireguard start"
+echo "  Drone:     /etc/init.d/S99drone start"
+echo ""
+echo "To stop services manually:"
+echo "  WireGuard: /etc/init.d/S10wireguard stop"
+echo "  Drone:     /etc/init.d/S99drone stop"
 echo ""
 echo "To check status:"
-echo "  Init script: /etc/init.d/S99drone status"
-echo "  Process list: ps aux | grep drone"
+echo "  WireGuard: /etc/init.d/S10wireguard status"
+echo "  Drone:     /etc/init.d/S99drone status"
 echo ""
-echo "Logs will be written to: /var/log/drone.log"
+echo "Logs:"
+echo "  WireGuard: /var/log/wireguard.log"
+echo "  Drone:     /var/log/drone.log"
+echo ""
+echo "WireGuard setup:"
+echo "  Generate keys: /usr/bin/generate-wg-keys.sh"
+echo "  Edit config:   /etc/wireguard/wg0.conf"
+echo "  Manual setup:  /usr/bin/wireguard-setup.sh start"

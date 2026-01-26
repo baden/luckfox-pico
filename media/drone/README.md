@@ -12,21 +12,30 @@ The drone application is automatically built when you run:
 ## File Locations After Build
 The following files will be installed in the target filesystem:
 
-### Binary
+### Application Binary
 - `/usr/bin/drone` - Main application binary
 
-### Service File (BusyBox/SysV init)
-- `/etc/init.d/S99drone` - System V init script (auto-starts at boot)
+### Service Files (BusyBox/SysV init)
+- `/etc/init.d/S10wireguard` - WireGuard VPN service (starts first)
+- `/etc/init.d/S99drone` - Drone application service (starts after VPN)
 
-### Configuration
-- `/etc/drone.conf` - Default configuration file
+### Configuration Files
+- `/etc/drone.conf` - Drone application configuration
+- `/etc/wireguard/wg0.conf` - WireGuard VPN configuration
 
-### Setup Script
-- `/usr/bin/setup_drone.sh` - Service activation script
+### Setup & Management Scripts
+- `/usr/bin/setup_drone.sh` - Drone service activation script
+- `/usr/bin/wireguard-setup.sh` - WireGuard VPN management script
+- `/usr/bin/generate-wg-keys.sh` - WireGuard key generation utility
+
+### Log Files (created at runtime)
+- `/var/log/drone.log` - Drone application logs
+- `/var/log/wireguard.log` - WireGuard VPN logs
 
 ### Note
 - **SystemD is not supported** on Luckfox Pico (uses BusyBox)
-- The `S99` prefix ensures the service starts last during boot sequence
+- The `S10` prefix ensures WireGuard starts early (after network init)
+- The `S99` prefix ensures Drone starts last (after VPN is ready)
 
 ## Installation on Target Device
 
@@ -71,35 +80,43 @@ Key settings:
 
 ## Usage
 
-### Starting the Application
+### Starting Services
 ```bash
-# As a service
-systemctl start drone
-# or
-/etc/init.d/drone start
+# WireGuard VPN (starts first)
+/etc/init.d/S10wireguard start
 
-# Directly (for testing)
-/usr/bin/drone
+# Drone application (starts after VPN)
+/etc/init.d/S99drone start
+
+# Or use setup script (handles both)
+setup_drone.sh
 ```
 
-### Stopping the Application
+### Stopping Services
 ```bash
-# As a service
-systemctl stop drone
-# or
-/etc/init.d/drone stop
+# WireGuard VPN
+/etc/init.d/S10wireguard stop
 
-# Directly (if running directly)
-pkill drone
+# Drone application
+/etc/init.d/S99drone stop
 ```
 
 ### Viewing Logs
 ```bash
-# SystemD journal
-journalctl -u drone -f
+# WireGuard logs
+tail -f /var/log/wireguard.log
 
-# Custom log file
+# Drone logs
 tail -f /var/log/drone.log
+```
+
+### Checking Status
+```bash
+# WireGuard status
+/etc/init.d/S10wireguard status
+
+# Drone status
+/etc/init.d/S99drone status
 ```
 
 ## Debugging
