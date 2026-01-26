@@ -8,7 +8,7 @@
 # endif
 
 all:
-	@$(DRONE_CC) $(DRONE_CFLAGS) drone.c -o drone $(LD_FLAGS)
+	@$(DRONE_CC) $(CFLAGS) drone.c -o drone $(LD_FLAGS)
 install:
 	@mv -f drone $(DRONE_OUT_DIR)/bin
 # ifeq ($(HAVE_AVS), y)

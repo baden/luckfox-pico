@@ -67,6 +67,12 @@ drone-build:
 	#@cp -rfa $(CURRENT_DIR)/include $(DRONE_OUT_DIR)/
 	@make -C $(CURRENT_DIR)/src;
 	@make -C $(CURRENT_DIR)/src install;
+	@mkdir -p $(DRONE_OUT_DIR)/etc/init.d
+	@cp -af $(CURRENT_DIR)/drone.init $(DRONE_OUT_DIR)/etc/init.d/S99drone
+	@mkdir -p $(DRONE_OUT_DIR)/usr/bin
+	@cp -af $(CURRENT_DIR)/setup_drone.sh $(DRONE_OUT_DIR)/usr/bin/
+	@cp -af $(CURRENT_DIR)/drone.conf $(DRONE_OUT_DIR)/etc/
+	@echo "Installed drone service files with S99 startup"
 
 clean:
 	@make -C $(CURRENT_DIR)/src clean
