@@ -22,6 +22,11 @@ int main(int argc, char *argv[])
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
 
+    // Встановлюємо line buffering для stdout
+    setvbuf(stdout, NULL, _IOLBF, 0);
+    // Встановлюємо line buffering для stderr (хоча він зазвичай і так такий)
+    setvbuf(stderr, NULL, _IOLBF, 0);
+
     printf("Starting drone app..."); fflush(stdout);
     init();
     printf("ok.\n");

@@ -962,7 +962,7 @@ function build_recovery() {
 		-o ! -f $RK_PROJECT_PATH_PC_TOOLS/mkimage ]; then
 		build_tool
 	fi
-	cp -fa $PROJECT_TOP_DIR/scripts/RkLunch-recovery.sh $RK_PROJECT_PATH_RAMDISK_TINY_ROOTFS/usr/bin/RkLunch.sh
+	#cp -fa $PROJECT_TOP_DIR/scripts/RkLunch-recovery.sh $RK_PROJECT_PATH_RAMDISK_TINY_ROOTFS/usr/bin/RkLunch.sh
 	cp -fa $PROJECT_TOP_DIR/scripts/boot4recovery.its $RK_PROJECT_PATH_RAMDISK
 
 	mkdir -p $(dirname $RK_PROJECT_FILE_RECOVERY_LUNCH_SCRIPT)
@@ -970,10 +970,10 @@ function build_recovery() {
 #!/bin/sh
 case \$1 in
 	start)
-		sh /usr/bin/RkLunch.sh
+		sh /usr/bin/DroneLunch.sh
 		;;
 	stop)
-		sh /usr/bin/RkLunch-stop.sh
+		sh /usr/bin/DroneLunch-stop.sh
 		;;
 	*)
 		exit 1
@@ -1466,10 +1466,10 @@ function __PACKAGE_OEM() {
 [ -f /etc/profile.d/RkEnv.sh ] && source /etc/profile.d/RkEnv.sh
 case \$1 in
 	start)
-		sh /oem/usr/bin/RkLunch.sh
+		sh /oem/usr/bin/DroneLunch.sh
 		;;
 	stop)
-		sh /oem/usr/bin/RkLunch-stop.sh
+		sh /oem/usr/bin/DroneLunch-stop.sh
 		;;
 	*)
 		exit 1
