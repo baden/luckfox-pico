@@ -1,0 +1,36 @@
+streams:
+  camera0: rtsp://admin:C0pyright77@192.168.3.181:554/cam/realmonitor?channel=1&subtype=0
+  camera1: rtsp://admin:C0pyright77@192.168.3.181:554/cam/realmonitor?channel=1&subtype=1
+  camera0udp: exec:ffmpeg -hide_banner -v error -fflags nobuffer -flags low_delay -fflags +genpts+discardcorrupt -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_transport udp -use_wallclock_as_timestamps 1  -strict experimental -i rtsp://admin:C0pyright77@192.168.3.181:554/cam/realmonitor?channel=1&subtype=0 -c copy -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}
+  camera1udp: exec:ffmpeg -hide_banner -v error -fflags nobuffer -flags low_delay -fflags +genpts+discardcorrupt -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_transport udp -use_wallclock_as_timestamps 1  -strict experimental -i rtsp://admin:C0pyright77@192.168.3.181:554/cam/realmonitor?channel=1&subtype=1 -c copy -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}
+  camera2-0: rtsp://admin:C0pyright77@192.168.3.108:554/cam/realmonitor?channel=1&subtype=0
+  camera2-1: rtsp://admin:C0pyright77@192.168.3.108:554/cam/realmonitor?channel=1&subtype=1
+  camera2-0udp: exec:ffmpeg -hide_banner -v error -fflags nobuffer -flags low_delay -fflags +genpts+discardcorrupt -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_transport udp -use_wallclock_as_timestamps 1  -strict experimental -i rtsp://admin:C0pyright77@192.168.3.108:554/cam/realmonitor?channel=1&subtype=0 -c copy -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}
+  camera2-1udp: exec:ffmpeg -hide_banner -v error -fflags nobuffer -flags low_delay -fflags +genpts+discardcorrupt -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_transport udp -use_wallclock_as_timestamps 1  -strict experimental -i rtsp://admin:C0pyright77@192.168.3.108:554/cam/realmonitor?channel=1&subtype=1 -c copy -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}
+  dahua_test: null
+  luckfox: rtsp://192.168.69.4/live/0
+  luckfox_local: rtsp://192.168.3.117/live/0
+  luckfox_local_udp: ffmpeg:rtsp://192.168.3.117:554/live/0#input=rtsp/udp
+  luckfox_local_udp1: ffmpeg:rtsp://192.168.3.117:554/live/1#input=rtsp/udp
+  doorbell: exec:ffmpeg -hide_banner -v error -fflags nobuffer -flags low_delay -fflags +genpts+discardcorrupt -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_transport udp -use_wallclock_as_timestamps 1  -strict experimental -i rtsp://192.168.3.117:554/live/0 -c copy -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}
+  rotate: ffmpeg:rtsp://192.168.3.117:554/live/0#video=h264#rotate=90#input=rtsp/udp
+  luckfox_input: null
+  luckfox_fpv4:
+    - "exec:ffmpeg -fflags nobuffer -flags low_delay -f h264 -i udp://0.0.0.0:5000 -c:v copy -rtsp_transport tcp -f rtsp {output}"
+  luckfox_fpv5:
+    - "exec:ffmpeg -fflags nobuffer -flags low_delay -f hevc -i udp://0.0.0.0:5000 -c:v copy -rtsp_transport tcp -f rtsp {output}"
+  luckfox_fpv_rtp: "udp://0.0.0.0:5000?encoding=H264&payload=96"
+  338-camera0: rtsp://root:C0pyright77@192.168.3.120:554/stream=0
+  338-camera0udp: exec:ffmpeg -hide_banner -v error -fflags nobuffer -flags low_delay -fflags +genpts+discardcorrupt -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_transport udp -use_wallclock_as_timestamps 1  -strict experimental -i rtsp://root:C0pyright77@192.168.3.120:554/stream=0 -c copy -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}
+
+rtmp:
+  listen: ":1935"
+
+webrtc:
+  # Явно змушуємо слухати і UDP, і TCP
+  listen: ":8555"
+  # ОБОВ'ЯЗКОВО вкажіть адресу Luckfox у VPN мережі
+  candidates:
+    - 10.8.0.2:8555
+  # Спробуйте вимкнути UDP mux, якщо ядро Luckfox має проблеми з ним
+  ice_servers: []

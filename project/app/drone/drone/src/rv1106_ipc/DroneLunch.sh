@@ -48,6 +48,23 @@ check_linker() {
 network_init() {
 	echo "Initializing VPN network..."
 
+	# TODO: What is this for?
+	ethaddr1=$(ifconfig -a | grep "eth.*HWaddr" | awk '{print $5}')
+
+	if [ -f /data/ethaddr.txt ]; then
+		ethaddr2=$(cat /data/ethaddr.txt)
+		if [ $ethaddr1 == $ethaddr2 ]; then
+			echo "eth HWaddr cfg ok"
+		else
+			ifconfig eth0 down
+			ifconfig eth0 hw ether $ethaddr2
+		fi
+	else
+		echo $ethaddr1 >/data/ethaddr.txt
+	fi
+	ifconfig eth0 up && udhcpc -i eth0 >/dev/null 2>&1
+
+
 	# Check if WireGuard interface already exists
 	if interface_exists; then
 		echo "WireGuard interface $WG_INTERFACE already exists."
@@ -107,6 +124,7 @@ network_init() {
 
 	# Configure WireGuard with private key and peer
 	wg set $WG_INTERFACE listen-port 51820 private-key $WG_PRIVATE_KEY peer $WG_SERVER_PUBLIC_KEY allowed-ips $WG_PEER_ALLOWED_IPS endpoint $WG_SERVER_IP:51820 persistent-keepalive 25
+	ip link set dev $WG_INTERFACE mtu 1280
 
 	# Bring interface up
 	echo "Bringing up interface $WG_INTERFACE..."
@@ -123,29 +141,36 @@ network_init() {
 
 	# Set up NAT (assuming eth0 is the outbound interface)
 	echo "Setting up NAT..."
+	# 1. Очищення (опціонально, залежить від вашої системи)
+	# iptables -F FORWARD
+	# iptables -F INPUT
+
+	# 2. Дозволяємо вхідний трафік для go2rtc (на самому Luckfox) через VPN
+	# Порти: 1984 (API/Web), 8554 (RTSP), 8555 (WebRTC UDP/TCP)
+	iptables -A INPUT -i $WG_INTERFACE -p tcp --dport 1984 -j ACCEPT
+	iptables -A INPUT -i $WG_INTERFACE -p tcp --dport 8554 -j ACCEPT
+	iptables -A INPUT -i $WG_INTERFACE -p tcp --dport 8555 -j ACCEPT
+	iptables -A INPUT -i $WG_INTERFACE -p udp --dport 8555 -j ACCEPT
+
+	# 3. NAT для виходу в інтернет через VPN (якщо потрібно для самого Luckfox)
 	iptables -t nat -A POSTROUTING -o $WG_INTERFACE -j MASQUERADE
-	iptables -A FORWARD -i eth0 -o $WG_INTERFACE -j ACCEPT
+
+	# 4. Forwarding: Дозволяємо клієнтам з VPN бачити камери
+	iptables -A FORWARD -i $WG_INTERFACE -o eth0 -j ACCEPT
+
+	# 5. Forwarding: Дозволяємо відповіді від камер іти в VPN
+	iptables -A FORWARD -i eth0 -o $WG_INTERFACE -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+	# iptables -A FORWARD -i eth0 -o $WG_INTERFACE -j ACCEPT
 	# iptables -A FORWARD -i wg0 -m state --state RELATED,ESTABLISHED -j ACCEPT
 	iptables -A FORWARD -i $WG_INTERFACE -o eth0 -m state --state RELATED,ESTABLISHED -j ACCEPT
 
+	# 6. БЛОКУВАННЯ: камери НЕ можуть ходити в інтернет через Luckfox
+	# (дозволяємо їм тільки спілкування з VPN мережею, все інше DROP)
+	# iptables -A FORWARD -i eth0 -s 10.0.0.0/24 ! -d 10.8.0.0/24 -j DROP
 
 	echo "Done."
 
-	# TODO: Start VPN service if needed (wireguard)
-	# ethaddr1=$(ifconfig -a | grep "eth.*HWaddr" | awk '{print $5}')
-
-	# if [ -f /data/ethaddr.txt ]; then
-	# 	ethaddr2=$(cat /data/ethaddr.txt)
-	# 	if [ $ethaddr1 == $ethaddr2 ]; then
-	# 		echo "eth HWaddr cfg ok"
-	# 	else
-	# 		ifconfig eth0 down
-	# 		ifconfig eth0 hw ether $ethaddr2
-	# 	fi
-	# else
-	# 	echo $ethaddr1 >/data/ethaddr.txt
-	# fi
-	# ifconfig eth0 up && udhcpc -i eth0 >/dev/null 2>&1
 }
 
 post_chk() {
