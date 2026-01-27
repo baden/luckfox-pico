@@ -12,27 +12,27 @@ export CONFIG_LIBDRM=y
 # Rockchip's MPP(Multimedia Processing Platform)
 #
 # Enable MPP Build
-export CONFIG_RK_MPP=y
+export CONFIG_RK_MPP=n
 # Rockchip MPP use drm allocator
 export CONFIG_RK_MPP_ALLOCATOR_DRM=n
 # Install test programs
-export CONFIG_RK_MPP_TESTS=y
+export CONFIG_RK_MPP_TESTS=n
 
 #------------------------------------------------
 # Rockchip's RKAIQ(Rockchip Auto Image Quality)
 #
 # Enable RKAIQ Build
-export CONFIG_RK_RKAIQ=y
+export CONFIG_RK_RKAIQ=n
 # ISP Hardware version
 export CONFIG_RK_ISP_HW_VERSION_V32=y
 # ISP build demo
-export CONFIG_RK_ISP_BUILD_DEMO=y
+export CONFIG_RK_ISP_BUILD_DEMO=n
 
 #------------------------------------------------
 # Rockchip's RGA2 (Raster Graphic Acceleration)
 #
 # Enable RGA2 Build
-export CONFIG_RK_RGA2=y
+export CONFIG_RK_RGA2=n
 # RGA2 build with libdrm
 export CONFIG_RK_RGA2_USE_LIBDRM=n
 
@@ -40,25 +40,25 @@ export CONFIG_RK_RGA2_USE_LIBDRM=n
 # Rockchip's common algorithm
 #
 # Enable common_algorithm Build
-export CONFIG_RK_COMMON_ALGORITHM=y
+export CONFIG_RK_COMMON_ALGORITHM=n
 
 #------------------------------------------------
 # Rockchip's rockit
 #
 # Enable Rockit Build
-export CONFIG_RK_ROCKIT=y
+export CONFIG_RK_ROCKIT=n
 
 #------------------------------------------------
 # Rockchip's iva
 #
 # Enable iva Build
-export CONFIG_RK_IVA=y
+export CONFIG_RK_IVA=n
 
 #------------------------------------------------
 # Rockchip's ive
 #
 # Enable ive Build
-export CONFIG_RK_IVE=y
+export CONFIG_RK_IVE=n
 
 #------------------------------------------------
 # Rockchip's hardware crypto
@@ -76,7 +76,7 @@ export CONFIG_RK_CRYPTO=n
 # Rockchip's avs
 #
 # Enable avs Build
-export CONFIG_RK_AVS=y
+export CONFIG_RK_AVS=n
 
 #------------------------------------------------
 # Rockchip's auto

@@ -57,6 +57,8 @@ else ifneq (, $(filter RKIPC_RV1106_WAKEUP_IPC, $(RK_APP_TYPE)))
 else ifneq (, $(filter RKIPC_RV1106_AIISP, $(RK_APP_TYPE)))
 	RK_RKIPC_CONFIG := -DCOMPILE_FOR_RV1106_AIISP=ON
 endif
+# Do not build RKIPC
+RK_RKIPC_CONFIG :=
 
 RK_APP_CFLAGS = -I $(RK_APP_MEDIA_INCLUDE_PATH) \
 				-I $(RK_APP_MEDIA_INCLUDE_PATH)/libdrm \
