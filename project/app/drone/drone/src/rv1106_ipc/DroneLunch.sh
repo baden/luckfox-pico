@@ -169,6 +169,15 @@ network_init() {
 	# (дозволяємо їм тільки спілкування з VPN мережею, все інше DROP)
 	# iptables -A FORWARD -i eth0 -s 10.0.0.0/24 ! -d 10.8.0.0/24 -j DROP
 
+	# Шоб мати доступ до камер з заводськими налаштуваннями (192.168.1.108/32)
+	ip route add 192.168.1.108 dev eth0
+	iptables -t nat -A POSTROUTING -o eth0 -d 192.168.1.0/24 -j MASQUERADE
+ 	iptables -A FORWARD -i wg0 -o eth0 -d 192.168.1.108 -j ACCEPT
+ 	iptables -A FORWARD -i eth0 -o wg0 -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+	# Підрізаємо пакети TCP до максимальної величини, щоб уникнути фрагментації
+ 	iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+
 	echo "Done."
 
 }
