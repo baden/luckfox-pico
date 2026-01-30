@@ -1,7 +1,11 @@
 streams:
-  camera0: rtsp://admin:C0pyright77@192.168.3.181:554/cam/realmonitor?channel=1&subtype=0
-  camera0-1: rtsp://admin:C0pyright77@192.168.3.181:554/cam/realmonitor?channel=1&subtype=1
-  camera1: rtsp://admin:C0pyright77@192.168.1.108:554/cam/realmonitor?channel=1&subtype=0
+  rear: rtsp://admin:C0pyright77@10.0.0.101:554/cam/realmonitor?channel=1&subtype=0
+  rear_a: rtsp://admin:C0pyright77@10.0.0.101:554/cam/realmonitor?channel=1&subtype=1
+  rear_tcp: rtsp://admin:C0pyright77@10.0.0.101:554/cam/realmonitor?channel=1&subtype=0#transport=tcp
+  rear_a_tcp: rtsp://admin:C0pyright77@10.0.0.101:554/cam/realmonitor?channel=1&subtype=1#transport=tcp
+  camera0udp: exec:ffmpeg -hide_banner -v error -fflags nobuffer -flags low_delay -fflags +genpts+discardcorrupt -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_transport udp -use_wallclock_as_timestamps 1  -strict experimental -i rtsp://admin:C0pyright77@10.0.0.101:554/cam/realmonitor?channel=1&subtype=0 -c copy -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}
+  camera1udp: exec:ffmpeg -hide_banner -v error -fflags nobuffer -flags low_delay -fflags +genpts+discardcorrupt -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_transport udp -use_wallclock_as_timestamps 1  -strict experimental -i rtsp://admin:C0pyright77@10.0.0.101:554/cam/realmonitor?channel=1&subtype=1 -c copy -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}
+  # udp_pusher: exec:ffmpeg -rtsp_transport tcp -i rtsp://localhost:8554/rear_a -c copy -f h264 udp://10.8.0.1:1111?pkt_size=1200
   #camera0udp: exec:ffmpeg -hide_banner -v error -fflags nobuffer -flags low_delay -fflags +genpts+discardcorrupt -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_transport udp -use_wallclock_as_timestamps 1  -strict experimental -i rtsp://admin:C0pyright77@192.168.3.181:554/cam/realmonitor?channel=1&subtype=0 -c copy -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}
   #camera1udp: exec:ffmpeg -hide_banner -v error -fflags nobuffer -flags low_delay -fflags +genpts+discardcorrupt -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_transport udp -use_wallclock_as_timestamps 1  -strict experimental -i rtsp://admin:C0pyright77@192.168.3.181:554/cam/realmonitor?channel=1&subtype=1 -c copy -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}
   #camera2-0: rtsp://admin:C0pyright77@192.168.3.108:554/cam/realmonitor?channel=1&subtype=0
@@ -26,6 +30,14 @@ streams:
 
 rtmp:
   listen: ":1935"
+
+rtsp:
+  listen: ":8554"
+  # Додайте це, якщо go2rtc дозволяє (деякі версії ігнорують, якщо немає модуля)
+  udp_range: [40000, 40100]
+
+srt:
+  listen: ":8889"
 
 webrtc:
   # Явно змушуємо слухати і UDP, і TCP

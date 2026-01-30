@@ -124,16 +124,21 @@ network_init() {
 
 	# Configure WireGuard with private key and peer
 	wg set $WG_INTERFACE listen-port 51820 private-key $WG_PRIVATE_KEY peer $WG_SERVER_PUBLIC_KEY allowed-ips $WG_PEER_ALLOWED_IPS endpoint $WG_SERVER_IP:51820 persistent-keepalive 25
-	ip link set dev $WG_INTERFACE mtu 1280
+	ip link set dev $WG_INTERFACE mtu 1200
 
 	# Bring interface up
 	echo "Bringing up interface $WG_INTERFACE..."
 	ip link set up dev $WG_INTERFACE
 
-
 	# Add 10.0.0.0/24 to eth0 for local network access
-	echo "Adding route to local network"
-	ip addr add 10.0.0.1/24 dev eth0
+	if ! ip addr show eth0 | grep -q "10.0.0.1"; then
+		echo "Adding route to local network"
+    	ip addr add 10.0.0.1/24 dev eth0
+	fi
+
+	# Шоб мати доступ до камер з заводськими налаштуваннями (192.168.1.108/32)
+	# ip route add 192.168.1.108 dev eth0
+	ip route replace 192.168.1.108 dev eth0
 
 	# Enable IP forwarding
 	echo "Enabling IP forwarding..."
@@ -147,39 +152,54 @@ network_init() {
 
 	# 2. Дозволяємо вхідний трафік для go2rtc (на самому Luckfox) через VPN
 	# Порти: 1984 (API/Web), 8554 (RTSP), 8555 (WebRTC UDP/TCP)
-	iptables -A INPUT -i $WG_INTERFACE -p tcp --dport 1984 -j ACCEPT
-	iptables -A INPUT -i $WG_INTERFACE -p tcp --dport 8554 -j ACCEPT
-	iptables -A INPUT -i $WG_INTERFACE -p tcp --dport 8555 -j ACCEPT
-	iptables -A INPUT -i $WG_INTERFACE -p udp --dport 8555 -j ACCEPT
+	iptables -I INPUT -i $WG_INTERFACE -p tcp -m multiport --dports 1984,8554,8555 -j ACCEPT
+	iptables -I INPUT -i $WG_INTERFACE -p udp --dport 8555 -j ACCEPT
+	# iptables -A INPUT -i $WG_INTERFACE -p tcp --dport 1984 -j ACCEPT
+	# iptables -A INPUT -i $WG_INTERFACE -p tcp --dport 8554 -j ACCEPT
+	# iptables -A INPUT -i $WG_INTERFACE -p tcp --dport 8555 -j ACCEPT
+	# iptables -A INPUT -i $WG_INTERFACE -p udp --dport 8555 -j ACCEPT
 
 	# 3. NAT для виходу в інтернет через VPN (якщо потрібно для самого Luckfox)
 	iptables -t nat -A POSTROUTING -o $WG_INTERFACE -j MASQUERADE
+	iptables -t nat -A POSTROUTING -o eth0 -d 192.168.1.0/24 -j MASQUERADE
+	iptables -t nat -A POSTROUTING -o eth0 -d 10.0.0.0/24 -j MASQUERADE
 
 	# 4. Forwarding: Дозволяємо клієнтам з VPN бачити камери
 	iptables -A FORWARD -i $WG_INTERFACE -o eth0 -j ACCEPT
-
-	# 5. Forwarding: Дозволяємо відповіді від камер іти в VPN
+	# Дозволяємо відповіді від камер у VPN
 	iptables -A FORWARD -i eth0 -o $WG_INTERFACE -m state --state RELATED,ESTABLISHED -j ACCEPT
-
-	# iptables -A FORWARD -i eth0 -o $WG_INTERFACE -j ACCEPT
-	# iptables -A FORWARD -i wg0 -m state --state RELATED,ESTABLISHED -j ACCEPT
-	iptables -A FORWARD -i $WG_INTERFACE -o eth0 -m state --state RELATED,ESTABLISHED -j ACCEPT
-
-	# 6. БЛОКУВАННЯ: камери НЕ можуть ходити в інтернет через Luckfox
-	# (дозволяємо їм тільки спілкування з VPN мережею, все інше DROP)
-	# iptables -A FORWARD -i eth0 -s 10.0.0.0/24 ! -d 10.8.0.0/24 -j DROP
-
-	# Шоб мати доступ до камер з заводськими налаштуваннями (192.168.1.108/32)
-	ip route add 192.168.1.108 dev eth0
-	iptables -t nat -A POSTROUTING -o eth0 -d 192.168.1.0/24 -j MASQUERADE
- 	iptables -A FORWARD -i wg0 -o eth0 -d 192.168.1.108 -j ACCEPT
- 	iptables -A FORWARD -i eth0 -o wg0 -m state --state RELATED,ESTABLISHED -j ACCEPT
 
 	# Підрізаємо пакети TCP до максимальної величини, щоб уникнути фрагментації
  	iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
 
-	echo "Done."
+	# 5. Forwarding: Дозволяємо відповіді від камер іти в VPN
+	# Попрередньє правиль вже це дозволяє?
+	# iptables -A FORWARD -i eth0 -o $WG_INTERFACE -m state --state RELATED,ESTABLISHED -j ACCEPT
 
+	# iptables -A FORWARD -i eth0 -o $WG_INTERFACE -j ACCEPT
+	# iptables -A FORWARD -i wg0 -m state --state RELATED,ESTABLISHED -j ACCEPT
+	# чи це треба?
+	# iptables -A FORWARD -i $WG_INTERFACE -o eth0 -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+	# 6. БЛОКУВАННЯ: камери НЕ можуть ходити в інтернет через Luckfox
+	# (дозволяємо їм тільки спілкування з VPN мережею, все інше DROP)
+	# Поки залишаємо, ще перевіримо роботу RTMP.
+	# iptables -A FORWARD -i eth0 -s 10.0.0.0/24 ! -d 10.8.0.0/24 -j DROP
+
+	# Якшо треба буде обмежити роботу тільки одним IP
+	# iptables -t nat -A POSTROUTING -o eth0 -d 192.168.1.0/24 -j MASQUERADE
+ 	# iptables -A FORWARD -i wg0 -o eth0 -d 192.168.1.108 -j ACCEPT
+ 	# iptables -A FORWARD -i eth0 -o wg0 -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+	# Set txqueuelen to 5000 for better performance
+	tc qdisc add dev eth0 root fq_codel
+	tc qdisc add dev wg0 root fq_codel limit 1000 target 5ms interval 100ms
+	ifconfig eth0 txqueuelen 5000
+	ifconfig wg0 txqueuelen 5000
+	sysctl -w net.core.rmem_max=2097152
+	sysctl -w net.core.wmem_max=2097152
+
+	echo "Done."
 }
 
 post_chk() {
@@ -219,10 +239,19 @@ post_chk() {
 	pidof drone >/dev/null 2>&1
 	if [ $? -eq 0 ]; then
 		echo "Drone application is already running."
-		return
+	else
+		echo "Starting Drone application..."
+		/oem/usr/bin/drone 2>&1 | logger -t drone_app &
 	fi
 
-	/oem/usr/bin/drone 2>&1 | logger -t drone_app &
+
+	pidof go2rtc >/dev/null 2>&1
+	if [ $? -eq 0 ]; then
+		echo "go2rtc is already running."
+	else
+		echo "Starting go2rtc..."
+		go2rtc -c /oem/usr/share/go2rtc.yaml 2>&1 | logger -t go2rtc &
+	fi
 }
 
 rcS

@@ -281,7 +281,7 @@ BUSYBOX_DIR := $(SYSDRV_DIR)/source/busybox
 SYSDRV_BUSYBOX_OBJS_OUTPUT_DIR ?= $(BUSYBOX_DIR)/objs_$(BUSYBOX_CFG)
 
 BUILDROOT_CFG ?= config_normal
-BUILDROOT_VER ?= buildroot-2025.08
+BUILDROOT_VER ?= buildroot-2025.11
 BUILDROOT_DIR := $(SYSDRV_DIR)/source/buildroot
 
 CUSTOM_VER ?= custom
