@@ -9,6 +9,24 @@
 Для додаткових камер відповідно 103, 104, ...
 
 
+Треба відкрити сторінку:
+
+```
+http://10.0.0.101/cgi-bin/configManager.cgi?action=getConfig&name=Network
+```
+
+Ввести імʼя, пароль. Якшо MTU=1500, то треба його поміняти:
+
+```
+http://10.0.0.101/cgi-bin/configManager.cgi?action=setConfig&Network.eth0.MTU=1200
+```
+
+Повинно показати OK. Перезавантажити камеру.
+
+```
+http://10.0.0.101/cgi-bin/magicBox.cgi?action=reboot
+```
+
 
 ## Сервер.
 

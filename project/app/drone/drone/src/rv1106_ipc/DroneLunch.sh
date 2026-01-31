@@ -250,6 +250,8 @@ post_chk() {
 		echo "go2rtc is already running."
 	else
 		echo "Starting go2rtc..."
+		export GOGC=20
+        export GOMEMLIMIT=50MiB
 		go2rtc -c /oem/usr/share/go2rtc.yaml 2>&1 | logger -t go2rtc &
 	fi
 }

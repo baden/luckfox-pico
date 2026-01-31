@@ -1,0 +1,30 @@
+#!/bin/sh
+
+# Назва нашого сервісу/скрипта
+NAME="python_supervisor"
+DAEMON="/root/run.sh"
+PIDFILE="/var/run/$NAME.pid"
+
+case "$1" in
+  start)
+    echo "Starting $NAME"
+    # Запускаємо наш супервізор у фоновому режимі (&)
+    # і зберігаємо його PID для можливості зупинки
+    start-stop-daemon --start --background --pidfile $PIDFILE --make-pidfile --exec $DAEMON
+    ;;
+  stop)
+    echo "Stopping $NAME"
+    # Зупиняємо процес супервізора за його PID
+    start-stop-daemon --stop --pidfile $PIDFILE --retry 5
+    ;;
+  restart)
+    $0 stop
+    sleep 1
+    $0 start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart}"
+    exit 1
+esac
+
+exit 0

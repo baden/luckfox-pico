@@ -1,0 +1,14 @@
+[Unit]
+Description=Drone App
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /home/baden/udp-drone.py
+WorkingDirectory=/home/baden
+Restart=always
+RestartSec=5
+User=baden
+Group=baden
+
+[Install]
+WantedBy=multi-user.target

@@ -12,7 +12,7 @@ export CONFIG_LIBDRM=y
 # Rockchip's MPP(Multimedia Processing Platform)
 #
 # Enable MPP Build
-export CONFIG_RK_MPP=n
+export CONFIG_RK_MPP=y
 # Rockchip MPP use drm allocator
 export CONFIG_RK_MPP_ALLOCATOR_DRM=n
 # Install test programs
@@ -32,7 +32,7 @@ export CONFIG_RK_ISP_BUILD_DEMO=n
 # Rockchip's RGA2 (Raster Graphic Acceleration)
 #
 # Enable RGA2 Build
-export CONFIG_RK_RGA2=n
+export CONFIG_RK_RGA2=y
 # RGA2 build with libdrm
 export CONFIG_RK_RGA2_USE_LIBDRM=n
 
@@ -46,7 +46,7 @@ export CONFIG_RK_COMMON_ALGORITHM=n
 # Rockchip's rockit
 #
 # Enable Rockit Build
-export CONFIG_RK_ROCKIT=n
+export CONFIG_RK_ROCKIT=y
 
 #------------------------------------------------
 # Rockchip's iva

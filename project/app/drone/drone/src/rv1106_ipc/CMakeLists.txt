@@ -1,50 +1,46 @@
 # cmake_minimum_required(VERSION 3.10...3.31)
 
-include_directories(${PROJECT_SOURCE_DIR}/./include
-					${CMAKE_SYSROOT}/usr/include/rkaiq/
-					${CMAKE_SYSROOT}/usr/include/rkaiq/uAPI
-					${CMAKE_SYSROOT}/usr/include/rkaiq/uAPI2
-					${CMAKE_SYSROOT}/usr/include/rkaiq/algos
-					${CMAKE_SYSROOT}/usr/include/rkaiq/common
-					${CMAKE_SYSROOT}/usr/include/rkaiq/xcore
-					${CMAKE_SYSROOT}/usr/include/rkaiq/iq_parser
-					${CMAKE_SYSROOT}/usr/include/rkaiq/iq_parser_v2
-					${CMAKE_SYSROOT}/usr/include/libdrm
-					${WPA_SUPPLICANT_INCLUDE_DIRS}
-					)
+# Add common source files for our drone application
+set(COMMON_SOURCES
+    ${PROJECT_SOURCE_DIR}/common/crsf.c
+    ${PROJECT_SOURCE_DIR}/common/udp_client.c
+    ${PROJECT_SOURCE_DIR}/common/gpio_control.c
+    ${PROJECT_SOURCE_DIR}/common/pwm_control.c
+)
 
-aux_source_directory(./ SRCS)
-# aux_source_directory(video SRCS)
-# aux_source_directory(server SRCS)
-aux_source_directory(${PROJECT_SOURCE_DIR}/common/ SRCS)
-aux_source_directory(${PROJECT_SOURCE_DIR}/common/oled SRCS)
-aux_source_directory(${PROJECT_SOURCE_DIR}/common/network SRCS)
-aux_source_directory(${PROJECT_SOURCE_DIR}/common/radio SRCS)
+# Add main source file
+set(MAIN_SOURCES
+    ./main.c
+)
 
-include_directories(video
-					server
-					${PROJECT_SOURCE_DIR}/common
-					${PROJECT_SOURCE_DIR}/common/oled
-					${PROJECT_SOURCE_DIR}/common/network
-					${PROJECT_SOURCE_DIR}/common/radio
-					)
+# Combine all sources
+set(ALL_SOURCES ${COMMON_SOURCES} ${MAIN_SOURCES})
 
-# link_directories(${PROJECT_SOURCE_DIR}/lib/arm-rockchip830-linux-uclibcgnueabihf)
+# Include directories
+include_directories(
+    ${PROJECT_SOURCE_DIR}/common
+)
 
-add_definitions(-DISP_HW_V32)
-#add_definitions(-g -ggdb)
-# add_definitions(-Os)
+# Add definitions for drone application
+add_definitions(-DDRONE_APP)
 
-# add_definitions(-fsanitize=address -g -ggdb -gdwarf -funwind-tables -rdynamic -O0)
-# add_definitions(-fno-stack-protector -fno-omit-frame-pointer -fsanitize-recover=address)
-# link_libraries(asan)
+# Add debug symbols for Debug build
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_definitions(-g -ggdb -O0)
+endif()
 
-add_executable(${PROJECT_NAME} ${SRCS})
-#target_link_libraries(${PROJECT_NAME} pthread rockit rockchip_mpp rkaiq rtsp rkaudio_detect aec_bf_process wpa_client m rkmuxer freetype rockiva iconv rknnmrt rga stdc++ rksysutils rkaudio)
-target_link_libraries(${PROJECT_NAME} pthread freetype iconv stdc++)
+# Create executable
+add_executable(${PROJECT_NAME} ${ALL_SOURCES})
 
+# Link libraries needed for our drone application
+target_link_libraries(${PROJECT_NAME} 
+    pthread 
+    m  # Math library for floating point operations
+    rt # Real-time library for clock functions
+)
+
+# Install the executable
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)
 install(PROGRAMS DroneLunch.sh DESTINATION bin)
 install(PROGRAMS DroneLunch-stop.sh DESTINATION bin)
-#install(FILES ${PROJECT_SOURCE_DIR}/common/osd/drone-logo.bmp DESTINATION share)
 install(FILES ${PROJECT_SOURCE_DIR}/common/go2rtc.yaml DESTINATION share)
