@@ -1,8 +1,12 @@
 streams:
+  front: rtsp://admin:C0pyright77@10.0.0.102:554/cam/realmonitor?channel=1&subtype=0
+  front_a: rtsp://admin:C0pyright77@10.0.0.102:554/cam/realmonitor?channel=1&subtype=1
   rear: rtsp://admin:C0pyright77@10.0.0.101:554/cam/realmonitor?channel=1&subtype=0
   rear_a: rtsp://admin:C0pyright77@10.0.0.101:554/cam/realmonitor?channel=1&subtype=1
-  rear_tcp: rtsp://admin:C0pyright77@10.0.0.101:554/cam/realmonitor?channel=1&subtype=0#transport=tcp
-  rear_a_tcp: rtsp://admin:C0pyright77@10.0.0.101:554/cam/realmonitor?channel=1&subtype=1#transport=tcp
+  back: rtsp://admin:C0pyright77@10.0.0.103:554/cam/realmonitor?channel=1&subtype=0
+  back_a: rtsp://admin:C0pyright77@10.0.0.103:554/cam/realmonitor?channel=1&subtype=1
+  # rear_tcp: rtsp://admin:C0pyright77@10.0.0.101:554/cam/realmonitor?channel=1&subtype=0#transport=tcp
+  # rear_a_tcp: rtsp://admin:C0pyright77@10.0.0.101:554/cam/realmonitor?channel=1&subtype=1#transport=tcp
   camera0udp: exec:ffmpeg -hide_banner -v error -fflags nobuffer -flags low_delay -fflags +genpts+discardcorrupt -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_transport udp -use_wallclock_as_timestamps 1  -strict experimental -i rtsp://admin:C0pyright77@10.0.0.101:554/cam/realmonitor?channel=1&subtype=0 -c copy -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}
   camera1udp: exec:ffmpeg -hide_banner -v error -fflags nobuffer -flags low_delay -fflags +genpts+discardcorrupt -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_transport udp -use_wallclock_as_timestamps 1  -strict experimental -i rtsp://admin:C0pyright77@10.0.0.101:554/cam/realmonitor?channel=1&subtype=1 -c copy -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}
   # udp_pusher: exec:ffmpeg -rtsp_transport tcp -i rtsp://localhost:8554/rear_a -c copy -f h264 udp://10.8.0.1:1111?pkt_size=1200
