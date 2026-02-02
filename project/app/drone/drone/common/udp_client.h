@@ -5,74 +5,66 @@
 #include <stdbool.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <common/mavlink.h>
 
-#define UDP_MAX_PACKET_SIZE 4096
-#define UDP_SERVER_HOST "s.navi.cc"
-#define UDP_SERVER_PORT 8766
-#define UDP_KEEP_ALIVE_INTERVAL 15
+// MAVLink connection settings
+#define UDP_SERVER_HOST "10.8.0.11"
+#define UDP_SERVER_PORT 14550
+#define MAV_SYSTEM_ID 1
+#define MAV_COMPONENT_ID MAV_COMP_ID_AUTOPILOT1
+
+// Telemetry/Heartbeat intervals
+#define HEARTBEAT_INTERVAL_MS 1000
+#define TELEMETRY_INTERVAL_MS 100 // 10Hz
 
 typedef struct {
     int sockfd;
     struct sockaddr_in server_addr;
     bool connected;
-    char device_id[32];
-    double last_send_time;
-    double last_receive_time;
+    double last_heartbeat_time;
+    double last_telemetry_time;
 } udp_client_t;
 
+// Simplified control input structure (mapped from MANUAL_CONTROL or RC_CHANNELS)
 typedef struct {
-    float axes[4];      // axes[0] - horizontal, axes[1] - vertical, axes[2] - switch B, axes[3] - switch C
-    int buttons[4];      // buttons[0] - ARM button
+    float axes[4];      // 0:Pitch, 1:Roll, 2:Throt, 3:Yaw (Normalized -1.0 to 1.0)
+    uint16_t buttons;   // Button mask
     bool valid;
     double timestamp;
-} udp_joystick_data_t;
-
-typedef enum {
-    UDP_COMMAND_UNKNOWN = 0,
-    UDP_COMMAND_JOY_UPDATE,
-    UDP_COMMAND_KEEP_ALIVE,
-    UDP_COMMAND_REGISTER,
-    UDP_COMMAND_RESTART
-} udp_command_type_t;
-
-typedef struct {
-    udp_command_type_t type;
-    union {
-        udp_joystick_data_t joystick;
-        struct {
-            char device_id[32];
-        } register_data;
-    } data;
-} udp_packet_t;
+    
+    // Command flags (one-shot)
+    bool cmd_arm;
+    bool cmd_disarm;
+    bool cmd_takeoff;
+} udp_control_input_t;
 
 // Initialize UDP client
-int udp_client_init(udp_client_t* client, const char* device_id);
+int udp_client_init(udp_client_t* client);
 
 // Cleanup UDP client
 void udp_client_cleanup(udp_client_t* client);
 
-// Connect to server
+// Connect to server (setup address)
 int udp_client_connect(udp_client_t* client);
 
-// Send keep-alive packet
-int udp_client_send_keep_alive(udp_client_t* client);
-
-// Send registration packet
-int udp_client_send_register(udp_client_t* client);
-
-// Receive data from server
-int udp_client_receive(udp_client_t* client, udp_packet_t* packet, double timeout_sec);
-
-// Check if connected
-bool udp_client_is_connected(const udp_client_t* client);
-
-// Reconnect if disconnected
+// Reconnect
 int udp_client_reconnect(udp_client_t* client);
 
-// Simple JSON parser for specific format
-int udp_parse_json_packet(const char* json_data, udp_packet_t* packet);
+// Check status
+bool udp_client_is_connected(const udp_client_t* client);
 
-// Get current time in seconds
+// Send Heartbeat
+int udp_client_send_heartbeat(udp_client_t* client, bool armed);
+
+// Send Telemetry (Attitude/Status/GPS)
+int udp_client_send_telemetry(udp_client_t* client, float axis0, float axis1, 
+                              int lebidka_state, int aktuator_state);
+
+// Receive and process MAVLink messages
+// Returns 1 if new control input available, 0 otherwise
+int udp_client_receive(udp_client_t* client, udp_control_input_t* input);
+
+// Utils
 double udp_get_time_seconds(void);
 
 #endif // UDP_CLIENT_H

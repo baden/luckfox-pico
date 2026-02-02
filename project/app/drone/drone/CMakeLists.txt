@@ -21,6 +21,9 @@ elseif(CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
 	add_definitions(-Os)
 endif()
 
+set(MAVLINK_DIR ${CMAKE_SOURCE_DIR}/../../component/third_libs/mavlink)
+include_directories(${MAVLINK_DIR})
+
 if(DRONE_CROSS_COMPILE)
 message(STATUS "CROSS COMPILE TOOL: ${DRONE_CROSS_COMPILE}")
 set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fdata-sections -ffunction-sections -Wl,-rpath-link,${PROJECT_SOURCE_DIR}/lib/${DRONE_CROSS_COMPILE}")

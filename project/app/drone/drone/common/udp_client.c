@@ -6,17 +6,7 @@
 #include <errno.h>
 #include <sys/time.h>
 #include <arpa/inet.h>
-#include <netdb.h>
-#include <sys/types.h>
-
-// Function to generate device ID from MAC (simplified version)
-static void generate_device_id(char* device_id, size_t size) {
-    // For now, use a simple timestamp-based ID
-    // In production, this should be based on actual MAC address
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    snprintf(device_id, size, "DRONE_%ld", tv.tv_sec % 1000000);
-}
+#include <math.h>
 
 double udp_get_time_seconds(void) {
     struct timeval tv;
@@ -24,303 +14,233 @@ double udp_get_time_seconds(void) {
     return tv.tv_sec + tv.tv_usec / 1000000.0;
 }
 
-// Very simple JSON parser - only parses specific format we need
-int udp_parse_json_packet(const char* json_data, udp_packet_t* packet) {
-    if (!json_data || !packet) {
-        return -1;
-    }
-    
-    memset(packet, 0, sizeof(udp_packet_t));
-    
-    // Look for "command" field
-    const char* cmd_start = strstr(json_data, "\"command\"");
-    if (!cmd_start) {
-        return -1;
-    }
-    
-    cmd_start = strchr(cmd_start, ':');
-    if (!cmd_start) {
-        return -1;
-    }
-    cmd_start++; // Skip ':'
-    
-    // Skip whitespace
-    while (*cmd_start == ' ' || *cmd_start == '\t' || *cmd_start == '\n') {
-        cmd_start++;
-    }
-    
-    // Parse command string
-    if (strncmp(cmd_start, "\"joy_update\"", 13) == 0) {
-        packet->type = UDP_COMMAND_JOY_UPDATE;
-        
-        // Parse data section
-        const char* data_start = strstr(json_data, "\"data\"");
-        if (!data_start) {
-            return -1;
-        }
-        
-        // Parse axes array
-        const char* axes_start = strstr(data_start, "\"axes\"");
-        if (axes_start) {
-            const char* bracket_start = strchr(axes_start, '[');
-            if (bracket_start) {
-                bracket_start++; // Skip '['
-                for (int i = 0; i < 4; i++) {
-                    char* end;
-                    packet->data.joystick.axes[i] = strtof(bracket_start, &end);
-                    if (bracket_start == end) {
-                        break; // No number found
-                    }
-                    bracket_start = end;
-                    // Skip to next number
-                    while (*bracket_start && (*bracket_start == ',' || *bracket_start == ' ' || *bracket_start == '\t')) {
-                        bracket_start++;
-                    }
-                }
-            }
-        }
-        
-        // Parse buttons array
-        const char* buttons_start = strstr(data_start, "\"buttons\"");
-        if (buttons_start) {
-            const char* bracket_start = strchr(buttons_start, '[');
-            if (bracket_start) {
-                bracket_start++; // Skip '['
-                for (int i = 0; i < 4; i++) {
-                    char* end;
-                    packet->data.joystick.buttons[i] = strtol(bracket_start, &end, 10);
-                    if (bracket_start == end) {
-                        break; // No number found
-                    }
-                    bracket_start = end;
-                    // Skip to next number
-                    while (*bracket_start && (*bracket_start == ',' || *bracket_start == ' ' || *bracket_start == '\t')) {
-                        bracket_start++;
-                    }
-                }
-            }
-        }
-        
-        packet->data.joystick.valid = true;
-        packet->data.joystick.timestamp = udp_get_time_seconds();
-        
-    } else if (strncmp(cmd_start, "\"restart\"", 9) == 0) {
-        packet->type = UDP_COMMAND_RESTART;
-        
-    } else {
-        packet->type = UDP_COMMAND_UNKNOWN;
-    }
-    
-    return 0;
-}
-
-int udp_client_init(udp_client_t* client, const char* device_id) {
-    if (!client) {
-        return -1;
-    }
-    
+int udp_client_init(udp_client_t* client) {
+    if (!client) return -1;
     memset(client, 0, sizeof(udp_client_t));
     client->sockfd = -1;
-    
-    if (device_id) {
-        strncpy(client->device_id, device_id, sizeof(client->device_id) - 1);
-    } else {
-        generate_device_id(client->device_id, sizeof(client->device_id));
-    }
-    
-    // Set up server address
-    memset(&client->server_addr, 0, sizeof(client->server_addr));
-    client->server_addr.sin_family = AF_INET;
-    client->server_addr.sin_port = htons(UDP_SERVER_PORT);
-    
-    // Resolve hostname
-    struct hostent* he = gethostbyname(UDP_SERVER_HOST);
-    if (!he) {
-        herror("gethostbyname");
-        return -1;
-    }
-    
-    memcpy(&client->server_addr.sin_addr, he->h_addr_list[0], he->h_length);
-    
     return udp_client_connect(client);
-}
-
-void udp_client_cleanup(udp_client_t* client) {
-    if (!client) {
-        return;
-    }
-    
-    if (client->sockfd >= 0) {
-        close(client->sockfd);
-        client->sockfd = -1;
-    }
-    
-    client->connected = false;
 }
 
 int udp_client_connect(udp_client_t* client) {
-    if (!client) {
-        return -1;
-    }
-    
-    // Close existing socket
-    if (client->sockfd >= 0) {
-        close(client->sockfd);
-    }
-    
-    // Create UDP socket
+    if (client->sockfd >= 0) close(client->sockfd);
+
     client->sockfd = socket(AF_INET, SOCK_DGRAM, 0);
     if (client->sockfd < 0) {
         perror("socket creation failed");
-        client->connected = false;
         return -1;
     }
-    
-    // Set socket timeout
+
+    // Set non-blocking/timeout
     struct timeval tv;
-    tv.tv_sec = 1;
-    tv.tv_usec = 0;
-    if (setsockopt(client->sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
-        perror("setsockopt timeout");
+    tv.tv_sec = 0;
+    tv.tv_usec = 10000; // 10ms timeout
+    setsockopt(client->sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
+    memset(&client->server_addr, 0, sizeof(client->server_addr));
+    client->server_addr.sin_family = AF_INET;
+    client->server_addr.sin_port = htons(UDP_SERVER_PORT);
+    if (inet_pton(AF_INET, UDP_SERVER_HOST, &client->server_addr.sin_addr) <= 0) {
+        perror("inet_pton failed");
+        return -1;
     }
-    
-    // Bind to any local port
-    struct sockaddr_in local_addr;
-    memset(&local_addr, 0, sizeof(local_addr));
-    local_addr.sin_family = AF_INET;
-    local_addr.sin_addr.s_addr = INADDR_ANY;
-    local_addr.sin_port = 0; // Any port
-    
-    if (bind(client->sockfd, (struct sockaddr*)&local_addr, sizeof(local_addr)) < 0) {
-        perror("bind failed");
+
+    client->connected = true;
+    printf("UDP: MAVLink client initialized for %s:%d\n", UDP_SERVER_HOST, UDP_SERVER_PORT);
+    return 0;
+}
+
+void udp_client_cleanup(udp_client_t* client) {
+    if (client && client->sockfd >= 0) {
         close(client->sockfd);
         client->sockfd = -1;
-        client->connected = false;
-        return -1;
     }
-    
-    client->connected = true;
-    printf("UDP: Connected to server %s:%d\n", UDP_SERVER_HOST, UDP_SERVER_PORT);
-    
-    // Send initial registration
-    return udp_client_send_register(client);
-}
-
-int udp_client_send_keep_alive(udp_client_t* client) {
-    if (!client || !client->connected) {
-        return -1;
-    }
-    
-    double current_time = udp_get_time_seconds();
-    if (current_time - client->last_send_time < UDP_KEEP_ALIVE_INTERVAL) {
-        return 0; // Not time to send yet
-    }
-    
-    char packet[256];
-    snprintf(packet, sizeof(packet), 
-        "{\"command\": \"keep_alive\", \"id\": \"%s\"}", 
-        client->device_id);
-    
-    ssize_t sent = sendto(client->sockfd, packet, strlen(packet), 0,
-                         (struct sockaddr*)&client->server_addr, sizeof(client->server_addr));
-    
-    if (sent < 0) {
-        perror("sendto keep_alive");
-        client->connected = false;
-        return -1;
-    }
-    
-    client->last_send_time = current_time;
-    printf("UDP: Sent keep-alive packet\n");
-    return 0;
-}
-
-int udp_client_send_register(udp_client_t* client) {
-    if (!client || !client->connected) {
-        return -1;
-    }
-    
-    char packet[256];
-    snprintf(packet, sizeof(packet), 
-        "{\"command\": \"register\", \"id\": \"%s\"}", 
-        client->device_id);
-    
-    ssize_t sent = sendto(client->sockfd, packet, strlen(packet), 0,
-                         (struct sockaddr*)&client->server_addr, sizeof(client->server_addr));
-    
-    if (sent < 0) {
-        perror("sendto register");
-        client->connected = false;
-        return -1;
-    }
-    
-    client->last_send_time = udp_get_time_seconds();
-    printf("UDP: Sent registration packet\n");
-    return 0;
-}
-
-int udp_client_receive(udp_client_t* client, udp_packet_t* packet, double timeout_sec) {
-    if (!client || !client->connected || !packet) {
-        return -1;
-    }
-    
-    // Set socket timeout
-    struct timeval tv;
-    tv.tv_sec = (int)timeout_sec;
-    tv.tv_usec = (int)((timeout_sec - tv.tv_sec) * 1000000);
-    if (setsockopt(client->sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
-        perror("setsockopt timeout");
-    }
-    
-    char buffer[UDP_MAX_PACKET_SIZE];
-    struct sockaddr_in from_addr;
-    socklen_t from_len = sizeof(from_addr);
-    
-    ssize_t received = recvfrom(client->sockfd, buffer, sizeof(buffer) - 1, 0,
-                               (struct sockaddr*)&from_addr, &from_len);
-    
-    if (received < 0) {
-        if (errno != EAGAIN && errno != EWOULDBLOCK) {
-            perror("recvfrom");
-            client->connected = false;
-            return -1;
-        }
-        return 0; // Timeout
-    }
-    
-    buffer[received] = '\0'; // Null-terminate
-    client->last_receive_time = udp_get_time_seconds();
-    
-    // Parse the JSON packet
-    if (udp_parse_json_packet(buffer, packet) != 0) {
-        printf("UDP: Failed to parse packet: %s\n", buffer);
-        return -1;
-    }
-    
-    return received;
-}
-
-bool udp_client_is_connected(const udp_client_t* client) {
-    return client ? client->connected : false;
 }
 
 int udp_client_reconnect(udp_client_t* client) {
-    if (!client) {
+    return udp_client_connect(client);
+}
+
+bool udp_client_is_connected(const udp_client_t* client) {
+    return client && client->connected;
+}
+
+static int send_mavlink_message(udp_client_t* client, mavlink_message_t* msg) {
+    uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
+    uint16_t len = mavlink_msg_to_send_buffer(buffer, msg);
+    
+    ssize_t sent = sendto(client->sockfd, buffer, len, 0, 
+                          (struct sockaddr*)&client->server_addr, sizeof(client->server_addr));
+    if (sent < 0) {
+        // perror("UDP send failed");
         return -1;
     }
+    return 0;
+}
+
+static int send_command_ack(udp_client_t* client, uint16_t command, uint8_t result) {
+    mavlink_message_t msg;
+    mavlink_msg_command_ack_pack(MAV_SYSTEM_ID, MAV_COMPONENT_ID, &msg,
+                                 command, result, 0, 0, 0, 0);
+    return send_mavlink_message(client, &msg);
+}
+
+int udp_client_send_heartbeat(udp_client_t* client, bool armed) {
+    mavlink_message_t msg;
+    uint8_t base_mode = MAV_MODE_FLAG_MANUAL_INPUT_ENABLED;
+    if (armed) base_mode |= MAV_MODE_FLAG_SAFETY_ARMED;
     
-    printf("UDP: Attempting to reconnect...\n");
+    // MAV_STATE_ACTIVE if armed, else STANDBY
+    uint8_t system_status = armed ? MAV_STATE_ACTIVE : MAV_STATE_STANDBY;
+
+    mavlink_msg_heartbeat_pack(MAV_SYSTEM_ID, MAV_COMPONENT_ID, &msg, 
+                               MAV_TYPE_QUADROTOR, MAV_AUTOPILOT_ARDUPILOTMEGA, 
+                               base_mode, 0, system_status);
     
-    // Close existing connection
-    if (client->sockfd >= 0) {
-        close(client->sockfd);
-        client->sockfd = -1;
+    client->last_heartbeat_time = udp_get_time_seconds();
+    return send_mavlink_message(client, &msg);
+}
+
+int udp_client_send_telemetry(udp_client_t* client, float axis0, float axis1, 
+                              int lebidka_state, int aktuator_state) {
+    
+    mavlink_message_t msg;
+    
+    // Send ATTITUDE
+    // Stick positions mapped to Roll/Pitch for visualization
+    float roll = axis0; 
+    float pitch = axis1;
+    float yaw = 0.0f;
+    uint32_t boot_ms = (uint32_t)(udp_get_time_seconds() * 1000);
+    
+    mavlink_msg_attitude_pack(MAV_SYSTEM_ID, MAV_COMPONENT_ID, &msg,
+                              boot_ms, roll, pitch, yaw, 0, 0, 0);
+    send_mavlink_message(client, &msg);
+
+    // Send named values for custom states
+    mavlink_msg_named_value_int_pack(MAV_SYSTEM_ID, MAV_COMPONENT_ID, &msg,
+                                     boot_ms, "LEBIDKA", lebidka_state);
+    send_mavlink_message(client, &msg);
+
+    mavlink_msg_named_value_int_pack(MAV_SYSTEM_ID, MAV_COMPONENT_ID, &msg,
+                                     boot_ms, "AKTUATOR", aktuator_state);
+    send_mavlink_message(client, &msg);
+    
+    // Also send VFR_HUD for Compass (Yaw as Heading)
+    int16_t heading = (int16_t)(yaw * 180.0f / M_PI);
+    if(heading < 0) heading += 360;
+    mavlink_msg_vfr_hud_pack(MAV_SYSTEM_ID, MAV_COMPONENT_ID, &msg,
+                             0, 0, heading, 0, 0, 0);
+    send_mavlink_message(client, &msg);
+    
+    return 0;
+}
+
+int udp_client_receive(udp_client_t* client, udp_control_input_t* input) {
+    uint8_t buffer[2048];
+    struct sockaddr_in src_addr;
+    socklen_t addr_len = sizeof(src_addr);
+    
+    ssize_t received = recvfrom(client->sockfd, buffer, sizeof(buffer), 0,
+                                (struct sockaddr*)&src_addr, &addr_len);
+    
+    if (received > 0) {
+        mavlink_message_t msg;
+        mavlink_status_t status;
+        
+        bool input_updated = false;
+        
+        for (int i = 0; i < received; ++i) {
+            if (mavlink_parse_char(MAVLINK_COMM_0, buffer[i], &msg, &status)) {
+                
+                switch (msg.msgid) {
+                    case MAVLINK_MSG_ID_MANUAL_CONTROL: {
+                        mavlink_manual_control_t packet;
+                        mavlink_msg_manual_control_decode(&msg, &packet);
+                        
+                        // MAVLink MANUAL_CONTROL is -1000..1000
+                        input->axes[0] = packet.x / 1000.0f; // Pitch
+                        input->axes[1] = packet.y / 1000.0f; // Roll
+                        input->axes[2] = packet.z / 1000.0f; // Throttle
+                        input->axes[3] = packet.r / 1000.0f; // Yaw
+                        input->buttons = packet.buttons;
+                        input->valid = true;
+                        input->timestamp = udp_get_time_seconds();
+                        input_updated = true;
+                        
+                        printf("MAVLink: MANUAL_CONTROL R=%.2f P=%.2f T=%.2f Y=%.2f Btn=%d\n",
+                               input->axes[1], input->axes[0], input->axes[2], input->axes[3], input->buttons);
+                        break;
+                    }
+                    
+                    case MAVLINK_MSG_ID_RC_CHANNELS_OVERRIDE: {
+                        mavlink_rc_channels_override_t packet;
+                        mavlink_msg_rc_channels_override_decode(&msg, &packet);
+                        
+                        // Map PWM 1000..2000 to -1.0..1.0
+                        // Using block as simple lambda replacement
+                        // Channel 1: Roll, 2: Pitch, 3: Throttle, 4: Yaw (AETR or TAER?)
+                        // Usually: 1=Roll, 2=Pitch, 3=Throttle, 4=Yaw
+                        
+                        float ch1 = (packet.chan1_raw == 0 || packet.chan1_raw == 65535) ? 0.0f : (packet.chan1_raw - 1500) / 500.0f;
+                        float ch2 = (packet.chan2_raw == 0 || packet.chan2_raw == 65535) ? 0.0f : (packet.chan2_raw - 1500) / 500.0f;
+                        float ch3 = (packet.chan3_raw == 0 || packet.chan3_raw == 65535) ? 0.0f : (packet.chan3_raw - 1500) / 500.0f;
+                        float ch4 = (packet.chan4_raw == 0 || packet.chan4_raw == 65535) ? 0.0f : (packet.chan4_raw - 1500) / 500.0f;
+
+                        input->axes[1] = ch1; // Roll
+                        input->axes[0] = ch2; // Pitch
+                        input->axes[2] = ch3; // Throttle
+                        input->axes[3] = ch4; // Yaw
+                        input->valid = true;
+                        input->timestamp = udp_get_time_seconds();
+                        input_updated = true;
+                        
+                        printf("MAVLink: RC_OVERRIDE Ch1=%d Ch2=%d Ch3=%d Ch4=%d\n",
+                               packet.chan1_raw, packet.chan2_raw, packet.chan3_raw, packet.chan4_raw);
+                        break;
+                    }
+                    
+                    case MAVLINK_MSG_ID_COMMAND_LONG: {
+                        mavlink_command_long_t packet;
+                        mavlink_msg_command_long_decode(&msg, &packet);
+                        
+                        // Check if command is for us
+                        if (packet.target_system == MAV_SYSTEM_ID || packet.target_system == 0) {
+                            if (packet.command == MAV_CMD_COMPONENT_ARM_DISARM) {
+                                if (packet.param1 == 1.0f) {
+                                    input->cmd_arm = true;
+                                    printf("MAVLink CMD: ARM\n");
+                                } else {
+                                    input->cmd_disarm = true;
+                                    printf("MAVLink CMD: DISARM\n");
+                                }
+                                send_command_ack(client, packet.command, MAV_RESULT_ACCEPTED);
+                                input_updated = true;
+                            } else if (packet.command == MAV_CMD_NAV_TAKEOFF) {
+                                input->cmd_takeoff = true;
+                                printf("MAVLink CMD: TAKEOFF\n");
+                                send_command_ack(client, packet.command, MAV_RESULT_ACCEPTED);
+                                input_updated = true;
+                            } else if (packet.command == 176) { // MAV_CMD_DO_SET_MODE
+                                printf("MAVLink CMD: SET_MODE (Mode=%.0f, Custom=%.0f)\n", packet.param1, packet.param2);
+                                // Always accept mode changes to satisfy QGC
+                                send_command_ack(client, packet.command, MAV_RESULT_ACCEPTED);
+                            } else {
+                                printf("MAVLink CMD: %d\n", packet.command);
+                                // Optional: Send UNSUPPORTED only if we want to be strict,
+                                // but for now silent ignore is safer to avoid spamming ACKs for unknown cmds
+                            }
+                        }
+                        break;
+                    }
+                    
+                    case MAVLINK_MSG_ID_HEARTBEAT:
+                        // printf("MAVLink: Heartbeat from %d/%d\n", msg.sysid, msg.compid);
+                        break;
+                }
+            }
+        }
+        return input_updated ? 1 : 0;
     }
     
-    client->connected = false;
-    
-    // Wait a bit before reconnecting
-    sleep(2);
-    
-    return udp_client_connect(client);
+    return 0;
 }
