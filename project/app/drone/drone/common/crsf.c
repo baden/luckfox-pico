@@ -6,8 +6,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <sys/time.h>
-#include <sys/ioctl.h>
-#include <linux/serial.h>
+#include "uart_utils.h"
 
 static double get_time_seconds(void) {
     struct timeval tv;
@@ -15,96 +14,20 @@ static double get_time_seconds(void) {
     return tv.tv_sec + tv.tv_usec / 1000000.0;
 }
 
-static int configure_uart(int fd, int baudrate) {
-    struct termios tty;
-    struct serial_struct ser;
-
-    if (tcgetattr(fd, &tty) != 0) {
-        perror("tcgetattr");
-        return -1;
-    }
-
-    // Clear old settings
-    memset(&tty, 0, sizeof tty);
-
-    // Configure serial port
-    tty.c_cflag &= ~PARENB;   // No parity
-    tty.c_cflag &= ~CSTOPB;   // One stop bit
-    tty.c_cflag &= ~CSIZE;    // Clear data bits
-    tty.c_cflag |= CS8;       // 8 data bits
-    tty.c_cflag &= ~CRTSCTS;  // No hardware flow control
-    tty.c_cflag |= CREAD | CLOCAL; // Enable receiver, ignore modem control
-
-    // Disable software flow control
-    tty.c_iflag &= ~(IXON | IXOFF | IXANY);
-
-    // Raw mode
-    tty.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
-    tty.c_oflag &= ~OPOST;
-
-    // Set timeout
-    tty.c_cc[VMIN] = 0;
-    tty.c_cc[VTIME] = 1; // 0.1 second timeout
-
-    // Try to set custom baudrate first
-    if (ioctl(fd, TIOCGSERIAL, &ser) == 0) {
-        ser.flags &= ~ASYNC_SPD_MASK;
-        ser.flags |= ASYNC_SPD_CUST;
-        ser.custom_divisor = ser.baud_base / baudrate;
-
-        if (ioctl(fd, TIOCSSERIAL, &ser) == 0) {
-            // Now set termios to B38400 to use custom divisor
-            if (cfsetispeed(&tty, B38400) != 0 || cfsetospeed(&tty, B38400) != 0) {
-                perror("cfsetispeed/cfsetospeed for custom baud");
-                goto fallback;
+// CRC8 implementation (Polynomial: 0xD5)
+static uint8_t crsf_crc8(const uint8_t *data, int len) {
+    uint8_t crc = 0;
+    for (int i = 0; i < len; i++) {
+        crc ^= data[i];
+        for (int j = 0; j < 8; j++) {
+            if (crc & 0x80) {
+                crc = (crc << 1) ^ 0xD5;
+            } else {
+                crc = crc << 1;
             }
-
-            if (tcsetattr(fd, TCSANOW, &tty) != 0) {
-                perror("tcsetattr for custom baud");
-                goto fallback;
-            }
-
-            printf("CRSF: Successfully set custom baudrate: %d (divisor: %d)\n",
-                   baudrate, ser.custom_divisor);
-            return 0;
-        } else {
-            perror("TIOCSSERIAL");
         }
     }
-
-fallback:
-    // Fallback to standard baudrates
-    printf("CRSF: Custom baudrate failed, using standard fallback\n");
-
-    speed_t speed;
-    switch (baudrate) {
-        case 9600: speed = B9600; break;
-        case 19200: speed = B19200; break;
-        case 38400: speed = B38400; break;
-        case 57600: speed = B57600; break;
-        case 115200: speed = B115200; break;
-        case 230400: speed = B230400; break;
-        case 460800: speed = B460800; break;
-        case 500000: speed = B500000; break;
-        default:
-            // For 420000, try 38400 as a working fallback
-            printf("CRSF: Using 38400 baud as fallback for %d\n", baudrate);
-            speed = B38400;
-            break;
-    }
-
-    if (cfsetispeed(&tty, speed) != 0 || cfsetospeed(&tty, speed) != 0) {
-        perror("cfsetispeed/cfsetospeed fallback");
-        return -1;
-    }
-
-    if (tcsetattr(fd, TCSANOW, &tty) != 0) {
-        perror("tcsetattr fallback");
-        return -1;
-    }
-
-    printf("CRSF: Using standard baudrate: %d\n", baudrate);
-    return 0;
+    return crc;
 }
 
 static void parse_rc_channels(crsf_t* crsf, const uint8_t* payload, int payload_len) {
@@ -112,8 +35,6 @@ static void parse_rc_channels(crsf_t* crsf, const uint8_t* payload, int payload_
         printf("CRSF: RC channels payload too short: %d bytes\n", payload_len);
         return;
     }
-
-    printf("CRSF: Parsing RC channels\n");
 
     // Parse 16 channels, 11 bits each
     // The channels are packed into 22 bytes (176 bits)
@@ -166,62 +87,69 @@ static void parse_rc_channels(crsf_t* crsf, const uint8_t* payload, int payload_
 }
 
 static int parse_packet(crsf_t* crsf) {
-    // Look for sync byte
-    int sync_index = -1;
-    for (int i = 0; i < crsf->buffer_len - 2; i++) {
-        if (crsf->buffer[i] == CRSF_SYNC_BYTE) {
-            sync_index = i;
-            break;
+    // Robust parser that searches for valid packets in the buffer
+    
+    // We need at least 4 bytes for a minimal packet: Sync, Length, Type, CRC
+    while (crsf->buffer_len >= 4) {
+        // 1. Find Sync Byte
+        if (crsf->buffer[0] != CRSF_SYNC_BYTE) {
+            // Shift buffer by 1 to search for next sync byte
+            memmove(crsf->buffer, &crsf->buffer[1], --crsf->buffer_len);
+            continue;
         }
-    }
 
-    if (sync_index == -1) {
-        // No sync byte found, clear buffer
-        crsf->buffer_len = 0;
-        return 0;
-    }
+        // 2. Check Length
+        uint8_t length = crsf->buffer[1];
+        // Length range sanity check (e.g., 2 to 62 bytes payload)
+        // Length = Type(1) + Payload(N) + CRC(1). So min length is 2.
+        // Max CRSF packet is usually small (64 bytes). Let's allow up to 64.
+        if (length < 2 || length > 64) {
+             // Invalid length, shift by 1 and retry
+             memmove(crsf->buffer, &crsf->buffer[1], --crsf->buffer_len);
+             continue;
+        }
 
-    // Remove bytes before sync
-    if (sync_index > 0) {
-        memmove(crsf->buffer, &crsf->buffer[sync_index], crsf->buffer_len - sync_index);
-        crsf->buffer_len -= sync_index;
-        sync_index = 0;
-    }
+        // 3. Check if we have the full packet
+        int packet_size = length + 2; // Sync + Length + (Type + Payload + CRC)
+        if (crsf->buffer_len < packet_size) {
+            // Wait for more data
+            return 0; 
+        }
 
-    // Check if we have enough for header
-    if (crsf->buffer_len < 3) {
-        return 0; // Need more data
-    }
+        // 4. Verify CRC
+        // CRC is calculated over Type(buffer[2]) to end of Payload
+        // Length field includes Type, Payload, CRC. 
+        // So data for CRC is buffer[2] ... buffer[2 + length - 2]
+        // Count = length - 1 (everything after length byte except CRC byte)
+        
+        uint8_t received_crc = crsf->buffer[packet_size - 1];
+        uint8_t calculated_crc = crsf_crc8(&crsf->buffer[2], length - 1);
+        
+        if (received_crc != calculated_crc) {
+            // printf("CRSF: CRC Mismatch (Len=%d, Calc=%02X, Recv=%02X)\n", length, calculated_crc, received_crc);
+            // CRC failed. Shift by 1 and retry. 
+            // We assume this Sync Byte was a false positive.
+            memmove(crsf->buffer, &crsf->buffer[1], --crsf->buffer_len);
+            continue;
+        }
 
-    // Get packet length (length includes type + payload + crc, but not sync)
-    uint8_t packet_length = crsf->buffer[1];
-    int total_packet_size = packet_length + 2; // + sync byte + length byte
+        // printf("CRSF: Valid packet received (Type=%02X, Len=%d)\n", crsf->buffer[2], length);
 
-    // Check if we have full packet
-    if (crsf->buffer_len < total_packet_size) {
-        return 0; // Need more data
-    }
+        // 5. Process Packet
+        uint8_t type = crsf->buffer[2];
+        const uint8_t* payload = &crsf->buffer[3];
+        int payload_len = length - 2;
 
-    // Extract packet components
-    uint8_t frame_type = crsf->buffer[2];
-    const uint8_t* payload = &crsf->buffer[3];
-    int payload_len = packet_length - 2; // Subtract type and crc
-
-    // Process based on frame type
-    switch (frame_type) {
-        case CRSF_FRAMETYPE_RC_CHANNELS_PACKET:
+        if (type == CRSF_FRAMETYPE_RC_CHANNELS_PACKET) {
             parse_rc_channels(crsf, payload, payload_len);
-            break;
-        default:
-            // Ignore other frame types
-            break;
+        }
+
+        // 6. Consume Packet
+        memmove(crsf->buffer, &crsf->buffer[packet_size], crsf->buffer_len - packet_size);
+        crsf->buffer_len -= packet_size;
+        return 1; // Processed one packet
     }
-
-    // Remove processed packet from buffer
-    memmove(crsf->buffer, &crsf->buffer[total_packet_size], crsf->buffer_len - total_packet_size);
-    crsf->buffer_len -= total_packet_size;
-
-    return 1;
+    return 0; // No more packets to process
 }
 
 int crsf_init(crsf_t* crsf, const char* device_path, int baudrate) {
@@ -273,8 +201,8 @@ int crsf_reconnect(crsf_t* crsf) {
         return -1;
     }
 
-    // Configure UART
-    if (configure_uart(crsf->fd, crsf->baudrate) != 0) {
+    // Configure UART using termios2
+    if (uart_set_custom_speed(crsf->fd, crsf->baudrate) != 0) {
         close(crsf->fd);
         crsf->fd = -1;
         crsf->connected = false;
@@ -282,7 +210,7 @@ int crsf_reconnect(crsf_t* crsf) {
     }
 
     crsf->connected = true;
-    printf("CRSF: Connected to %s at %d baud\n", crsf->device_path, crsf->baudrate);
+    printf("CRSF: Connected to %s at %d baud (termios2)\n", crsf->device_path, crsf->baudrate);
     return 0;
 }
 
@@ -292,25 +220,35 @@ int crsf_process(crsf_t* crsf) {
         return -1;
     }
 
-    // Read available data
-    uint8_t temp_buffer[64];
-    ssize_t bytes_read = read(crsf->fd, temp_buffer, sizeof(temp_buffer));
+    // Determine how much space is left
+    int space_left = CRSF_MAX_BUFFER_SIZE - crsf->buffer_len;
+    
+    // Safety check: if buffer is full, we must clear it to avoid getting stuck
+    if (space_left <= 0) {
+        printf("CRSF: Buffer overflow (full), resetting buffer\n");
+        crsf->buffer_len = 0;
+        space_left = CRSF_MAX_BUFFER_SIZE;
+    }
+
+    uint8_t temp_buffer[128];
+    // Read up to what we can fit, or a reasonable chunk
+    int to_read = (space_left < sizeof(temp_buffer)) ? space_left : sizeof(temp_buffer);
+    
+    ssize_t bytes_read = read(crsf->fd, temp_buffer, to_read);
 
     if (bytes_read > 0) {
-        printf("CRSF: Read %zd bytes\n", bytes_read);
-        // Add to buffer
-        if (crsf->buffer_len + bytes_read < CRSF_MAX_BUFFER_SIZE) {
-            memcpy(&crsf->buffer[crsf->buffer_len], temp_buffer, bytes_read);
-            crsf->buffer_len += bytes_read;
-        } else {
-            printf("CRSF: Buffer overflow, resetting\n");
-            crsf->buffer_len = 0;
-            return -1;
-        }
+        // Debug raw data (commented out for production, useful for debugging baudrate)
+        // printf("RAW: ");
+        // for(int i=0; i<bytes_read; i++) printf("%02X ", temp_buffer[i]);
+        // printf("\n");
 
-        // Parse packets
+        // Add to buffer
+        memcpy(&crsf->buffer[crsf->buffer_len], temp_buffer, bytes_read);
+        crsf->buffer_len += bytes_read;
+
+        // Parse packets loop
         while (parse_packet(crsf) > 0) {
-            // Continue parsing
+            // Continue parsing until buffer is empty or no full packets left
         }
     } else if (bytes_read < 0) {
         if (errno != EAGAIN && errno != EWOULDBLOCK) {
