@@ -82,13 +82,27 @@ static void parse_rc_channels(crsf_t* crsf, const uint8_t* payload, int payload_
         bit_pos += 11;
     }
 
+    #if 0
+    static int skips = 0;
+    if(skips < 100) {
+        skips++;
+    } else {
+        skips = 0;
+        printf("CRSF: Parsed RC Channels: ");
+        for (int i = 0; i < CRSF_NUM_CHANNELS; i++) {
+            printf("%.2f ", crsf->channels.values[i]);
+        }
+        printf("\n");
+    }
+    #endif
+
     crsf->channels.valid = true;
     crsf->channels.timestamp = get_time_seconds();
 }
 
 static int parse_packet(crsf_t* crsf) {
     // Robust parser that searches for valid packets in the buffer
-    
+
     // We need at least 4 bytes for a minimal packet: Sync, Length, Type, CRC
     while (crsf->buffer_len >= 4) {
         // 1. Find Sync Byte
@@ -113,21 +127,21 @@ static int parse_packet(crsf_t* crsf) {
         int packet_size = length + 2; // Sync + Length + (Type + Payload + CRC)
         if (crsf->buffer_len < packet_size) {
             // Wait for more data
-            return 0; 
+            return 0;
         }
 
         // 4. Verify CRC
         // CRC is calculated over Type(buffer[2]) to end of Payload
-        // Length field includes Type, Payload, CRC. 
+        // Length field includes Type, Payload, CRC.
         // So data for CRC is buffer[2] ... buffer[2 + length - 2]
         // Count = length - 1 (everything after length byte except CRC byte)
-        
+
         uint8_t received_crc = crsf->buffer[packet_size - 1];
         uint8_t calculated_crc = crsf_crc8(&crsf->buffer[2], length - 1);
-        
+
         if (received_crc != calculated_crc) {
             // printf("CRSF: CRC Mismatch (Len=%d, Calc=%02X, Recv=%02X)\n", length, calculated_crc, received_crc);
-            // CRC failed. Shift by 1 and retry. 
+            // CRC failed. Shift by 1 and retry.
             // We assume this Sync Byte was a false positive.
             memmove(crsf->buffer, &crsf->buffer[1], --crsf->buffer_len);
             continue;
@@ -222,7 +236,7 @@ int crsf_process(crsf_t* crsf) {
 
     // Determine how much space is left
     int space_left = CRSF_MAX_BUFFER_SIZE - crsf->buffer_len;
-    
+
     // Safety check: if buffer is full, we must clear it to avoid getting stuck
     if (space_left <= 0) {
         printf("CRSF: Buffer overflow (full), resetting buffer\n");
@@ -233,7 +247,7 @@ int crsf_process(crsf_t* crsf) {
     uint8_t temp_buffer[128];
     // Read up to what we can fit, or a reasonable chunk
     int to_read = (space_left < sizeof(temp_buffer)) ? space_left : sizeof(temp_buffer);
-    
+
     ssize_t bytes_read = read(crsf->fd, temp_buffer, to_read);
 
     if (bytes_read > 0) {
