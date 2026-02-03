@@ -8,6 +8,7 @@ set(COMMON_SOURCES
     ${PROJECT_SOURCE_DIR}/common/pwm_control.c
     ${PROJECT_SOURCE_DIR}/common/uart_utils.c
     ${PROJECT_SOURCE_DIR}/common/web_server.c
+    ${PROJECT_SOURCE_DIR}/common/mongoose/mongoose.c
 )
 
 # Add main source file
@@ -21,10 +22,14 @@ set(ALL_SOURCES ${COMMON_SOURCES} ${MAIN_SOURCES})
 # Include directories
 include_directories(
     ${PROJECT_SOURCE_DIR}/common
+    ${PROJECT_SOURCE_DIR}/common/mongoose
 )
 
 # Add definitions for drone application
 add_definitions(-DDRONE_APP)
+
+# Suppress MAVLink warnings
+add_compile_options(-Wno-address-of-packed-member)
 
 # Add debug symbols for Debug build
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -35,8 +40,8 @@ endif()
 add_executable(${PROJECT_NAME} ${ALL_SOURCES})
 
 # Link libraries needed for our drone application
-target_link_libraries(${PROJECT_NAME} 
-    pthread 
+target_link_libraries(${PROJECT_NAME}
+    pthread
     m  # Math library for floating point operations
     rt # Real-time library for clock functions
 )

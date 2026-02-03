@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "drone_types.h"
+#include "mongoose/mongoose.h"
 
 // Input structure from Web Client (similar to UDP)
 typedef struct {
@@ -19,11 +20,14 @@ typedef struct {
 } web_control_input_t;
 
 typedef struct {
-    int server_fd;
-    int client_fd;
-    bool connected;
-    int port;
+    struct mg_mgr mgr;
     const char* www_root;
+    int port;
+    bool connected; // at least one client connected
+    
+    // Internal buffer for data transfer between callback and main loop
+    web_control_input_t temp_input;
+    bool has_new_input;
 } web_server_t;
 
 // Initialize the web server
