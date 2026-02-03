@@ -28,16 +28,28 @@ function setConnectionStatus(text, isError = false) {
 
 function connectWebSocket() {
     setConnectionStatus('Підключення до WebSocket-сервера...');
-    ws = new WebSocket("wss://s.navi.cc/ws");
+    // Connect to the drone's IP on port 80 (implied)
+    ws = new WebSocket("ws://10.8.0.2");
 
     ws.onopen = () => {
         wsConnected = true;
         setConnectionStatus('WebSocket підключено!');
-        ws.send(JSON.stringify({ command: "connectd", id: navigator.userAgent }));
+        // No initial handshake command needed for the C server
     };
 
     ws.onmessage = (event) => {
-        // console.log("Received:", event.data);
+        try {
+            const msg = JSON.parse(event.data);
+            // console.log("Telem:", msg);
+            if (msg.armed !== undefined) {
+                // Update UI with telemetry if elements exist
+                const statusText = `ARM: ${msg.armed ? 'ON' : 'OFF'} | R: ${msg.r.toFixed(2)} | P: ${msg.p.toFixed(2)}`;
+                // You might want to display this somewhere
+                // setConnectionStatus(statusText); // Optional: override status or add new element
+            }
+        } catch (e) {
+            console.error("Error parsing telemetry", e);
+        }
     };
 
     ws.onclose = (event) => {
@@ -137,6 +149,7 @@ if ('wakeLock' in navigator) {
 function prepareData(gamepad) {
     if (!gamepad) return null;
     const round3 = v => Math.round(v * 1000) / 1000;
+    console.log("gamepad.axes", gamepad.axes);
     if (gamepad.axes.length === 7 && gamepad.buttons.length === 24) {
         // Комбінація для [7,24]
         return {
@@ -149,7 +162,7 @@ function prepareData(gamepad) {
                 /*S2_wheel:*/ round3(gamepad.axes[6])
             ],
             buttons: [
-                /*E:*/ gamepad.buttons[0].pressed?1:0,
+                /*E:*/ (gamepad.axes[4]>0.5)?1:0, //gamepad.buttons[0].pressed?1:0,
                 /*A:*/ gamepad.buttons[1].pressed?1:0,
                 /*B:*/ gamepad.buttons[3].pressed?1:0,
                 /*D:*/ gamepad.buttons[4].pressed?1:0,
@@ -233,11 +246,21 @@ function updateGamepadStatus() {
             ping = true;
         }
         if (wsConnected && ws && ws.readyState === WebSocket.OPEN && needSend) {
+            const processedData = prepareData(gamepad);
+            // Flat JSON format for C backend
+            // Mapping based on prepareData output:
+            // axes[0]: RH (Roll), axes[1]: RV (Pitch), axes[2]: LV (Throttle), axes[3]: LH (Yaw)
+            // buttons[3]: D (Right Button) -> mapped to ARM
+            // Using "arm" key handles both arm (true) and disarm (false) in C backend
+            console.log("Sending data:", processedData);
             const data = {
-                command: "joy_update",
-                ping: ping,
-                id: droneId,
-                data: prepareData(gamepad)
+                // arm: processedData.buttons[3] === 1,
+                arm: processedData.buttons[0] === 1,
+                // arm: processedData.axes[4] > 0.5, // Using S1 wheel position for arming
+                a0: processedData.axes[0],
+                a1: processedData.axes[1],
+                a2: processedData.axes[2],
+                a3: processedData.axes[3]
             };
             ws.send(JSON.stringify(data));
             lastSendTime = currentTime;
