@@ -24,6 +24,8 @@ typedef struct {
     bool connected;
     double last_heartbeat_time;
     double last_telemetry_time;
+    char host[32];
+    int port;
 } udp_client_t;
 
 // Simplified control input structure (mapped from MANUAL_CONTROL or RC_CHANNELS)
@@ -42,8 +44,8 @@ typedef struct {
     uint32_t target_custom_mode;
 } udp_control_input_t;
 
-// Initialize UDP client
-int udp_client_init(udp_client_t* client);
+// Initialize UDP client with host and port
+int udp_client_init(udp_client_t* client, const char* host, int port);
 
 // Cleanup UDP client
 void udp_client_cleanup(udp_client_t* client);

@@ -88,10 +88,15 @@ double udp_get_time_seconds(void) {
     return tv.tv_sec + tv.tv_usec / 1000000.0;
 }
 
-int udp_client_init(udp_client_t* client) {
+int udp_client_init(udp_client_t* client, const char* host, int port) {
     if (!client) return -1;
     memset(client, 0, sizeof(udp_client_t));
     client->sockfd = -1;
+    
+    // Store connection details
+    strncpy(client->host, host, sizeof(client->host) - 1);
+    client->port = port;
+    
     return udp_client_connect(client);
 }
 
@@ -112,14 +117,14 @@ int udp_client_connect(udp_client_t* client) {
 
     memset(&client->server_addr, 0, sizeof(client->server_addr));
     client->server_addr.sin_family = AF_INET;
-    client->server_addr.sin_port = htons(UDP_SERVER_PORT);
-    if (inet_pton(AF_INET, UDP_SERVER_HOST, &client->server_addr.sin_addr) <= 0) {
+    client->server_addr.sin_port = htons(client->port);
+    if (inet_pton(AF_INET, client->host, &client->server_addr.sin_addr) <= 0) {
         perror("inet_pton failed");
         return -1;
     }
 
     client->connected = true;
-    printf("UDP: MAVLink client initialized for %s:%d\n", UDP_SERVER_HOST, UDP_SERVER_PORT);
+    printf("UDP: MAVLink client initialized for %s:%d\n", client->host, client->port);
     return 0;
 }
 

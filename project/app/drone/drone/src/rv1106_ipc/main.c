@@ -70,7 +70,7 @@ static double get_time_seconds(void) {
 }
 
 // Initialize all modules
-static int init_modules(void) {
+static int init_modules(const char* udp_host, int udp_port) {
     printf("Initializing modules...\n");
 
     // Initialize default state
@@ -85,7 +85,7 @@ static int init_modules(void) {
     }
     
     // Initialize UDP client (MAVLink)
-    if (udp_client_init(&g_udp) != 0) {
+    if (udp_client_init(&g_udp, udp_host, udp_port) != 0) {
         fprintf(stderr, "Failed to initialize UDP client\n");
         printf("Continuing without UDP control\n");
     }
@@ -115,6 +115,7 @@ static int init_modules(void) {
     printf("All modules initialized successfully\n");
     return 0;
 }
+
 
 // Cleanup all modules
 static void cleanup_modules(void) {
@@ -553,9 +554,31 @@ int main(int argc, char *argv[])
     setvbuf(stdout, NULL, _IOLBF, 0);
     setvbuf(stderr, NULL, _IOLBF, 0);
 
-    printf("Starting drone C application (MAVLink + Web enabled)...\n");
+    // Default UDP settings
+    char udp_host[32] = UDP_SERVER_HOST; // Default from header
+    int udp_port = UDP_SERVER_PORT;      // Default from header
     
-    if (init_modules() != 0) {
+    // Parse arguments
+    int opt;
+    while ((opt = getopt(argc, argv, "s:p:")) != -1) {
+        switch (opt) {
+            case 's':
+                strncpy(udp_host, optarg, sizeof(udp_host) - 1);
+                udp_host[sizeof(udp_host) - 1] = '\0';
+                break;
+            case 'p':
+                udp_port = atoi(optarg);
+                break;
+            default:
+                fprintf(stderr, "Usage: %s [-s server_ip] [-p server_port]\n", argv[0]);
+                return 1;
+        }
+    }
+
+    printf("Starting drone C application (MAVLink + Web enabled)...\n");
+    printf("UDP Server: %s:%d\n", udp_host, udp_port);
+    
+    if (init_modules(udp_host, udp_port) != 0) {
         fprintf(stderr, "Failed to initialize modules\n");
         return 1;
     }
