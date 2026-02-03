@@ -8,7 +8,8 @@
 #include <common/mavlink.h>
 
 // MAVLink connection settings
-#define UDP_SERVER_HOST "10.8.0.11"
+#define UDP_SERVER_HOST "10.8.0.3"
+// #define UDP_SERVER_HOST "10.8.0.11"
 #define UDP_SERVER_PORT 14550
 #define MAV_SYSTEM_ID 1
 #define MAV_COMPONENT_ID MAV_COMP_ID_AUTOPILOT1
@@ -31,7 +32,7 @@ typedef struct {
     uint16_t buttons;   // Button mask
     bool valid;
     double timestamp;
-    
+
     // Command flags (one-shot)
     bool cmd_arm;
     bool cmd_disarm;
@@ -60,7 +61,7 @@ bool udp_client_is_connected(const udp_client_t* client);
 int udp_client_send_heartbeat(udp_client_t* client, bool armed, uint8_t base_mode, uint32_t custom_mode);
 
 // Send Telemetry (Attitude/Status/GPS)
-int udp_client_send_telemetry(udp_client_t* client, float axis0, float axis1, 
+int udp_client_send_telemetry(udp_client_t* client, float axis0, float axis1,
                               int lebidka_state, int aktuator_state);
 
 // Receive and process MAVLink messages

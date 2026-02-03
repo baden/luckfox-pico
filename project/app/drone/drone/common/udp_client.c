@@ -8,6 +8,50 @@
 #include <arpa/inet.h>
 #include <math.h>
 
+// --- Parameter Definitions ---
+typedef struct {
+    char id[16];
+    float value;
+    uint8_t type; // MAV_PARAM_TYPE
+} mav_param_t;
+
+// Simulate some ArduPilot-like parameters to make QGC happy
+static mav_param_t g_drone_params[] = {
+    {"SYSID_THISMAV", 1.0f, MAV_PARAM_TYPE_REAL32}, // System ID
+    {"FRAME_CLASS",   1.0f, MAV_PARAM_TYPE_INT8},   // 1 = Quad
+    {"FRAME_TYPE",    1.0f, MAV_PARAM_TYPE_INT8},   // 1 = X type
+    {"AHRS_ORIENTATION", 0.0f, MAV_PARAM_TYPE_INT8}, // None
+    
+    // Minimal RC Mapping params (AETR order: 1=Roll, 2=Pitch, 3=Throttle, 4=Yaw)
+    {"RCMAP_ROLL",    1.0f, MAV_PARAM_TYPE_INT8},
+    {"RCMAP_PITCH",   2.0f, MAV_PARAM_TYPE_INT8},
+    {"RCMAP_THROTTLE",3.0f, MAV_PARAM_TYPE_INT8},
+    {"RCMAP_YAW",     4.0f, MAV_PARAM_TYPE_INT8},
+    
+    // RC calibration defaults
+    {"RC1_MIN",    1000.0f, MAV_PARAM_TYPE_INT16},
+    {"RC1_MAX",    2000.0f, MAV_PARAM_TYPE_INT16},
+    {"RC1_TRIM",   1500.0f, MAV_PARAM_TYPE_INT16},
+    {"RC2_MIN",    1000.0f, MAV_PARAM_TYPE_INT16},
+    {"RC2_MAX",    2000.0f, MAV_PARAM_TYPE_INT16},
+    {"RC2_TRIM",   1500.0f, MAV_PARAM_TYPE_INT16},
+    {"RC3_MIN",    1000.0f, MAV_PARAM_TYPE_INT16},
+    {"RC3_MAX",    2000.0f, MAV_PARAM_TYPE_INT16},
+    {"RC3_TRIM",   1000.0f, MAV_PARAM_TYPE_INT16},
+    {"RC4_MIN",    1000.0f, MAV_PARAM_TYPE_INT16},
+    {"RC4_MAX",    2000.0f, MAV_PARAM_TYPE_INT16},
+    {"RC4_TRIM",   1500.0f, MAV_PARAM_TYPE_INT16},
+    
+    // Compass ID (even if fake)
+    {"COMPASS_DEV_ID", 1.0f, MAV_PARAM_TYPE_INT32},
+
+    {"TEST_SENS_R",   1.0f, MAV_PARAM_TYPE_REAL32}, // Test param: Roll sensitivity
+    {"TEST_SENS_P",   1.0f, MAV_PARAM_TYPE_REAL32}, // Test param: Pitch sensitivity
+    {"LEBIDKA_SPEED", 50.0f, MAV_PARAM_TYPE_INT16}  // Custom param: Winch speed %
+};
+
+#define PARAMS_COUNT (sizeof(g_drone_params)/sizeof(g_drone_params[0]))
+
 double udp_get_time_seconds(void) {
     struct timeval tv;
     gettimeofday(&tv, NULL);
@@ -62,6 +106,44 @@ int udp_client_reconnect(udp_client_t* client) {
 
 bool udp_client_is_connected(const udp_client_t* client) {
     return client && client->connected;
+}
+
+// Helper to find parameter by index
+static const mav_param_t* get_param_by_index(uint16_t index);
+
+// Helper to find parameter by ID
+static const mav_param_t* get_param_by_id(const char* param_id);
+
+// Forward declaration needed for send_param_value
+static int send_mavlink_message(udp_client_t* client, mavlink_message_t* msg);
+
+// Helper to send a single parameter value
+static void send_param_value(udp_client_t* client, const mav_param_t* param, uint16_t index) {
+    mavlink_message_t msg;
+    mavlink_msg_param_value_pack(MAV_SYSTEM_ID, MAV_COMPONENT_ID, &msg,
+                                 param->id,
+                                 param->value,
+                                 param->type,
+                                 PARAMS_COUNT,
+                                 index);
+    send_mavlink_message(client, &msg);
+}
+
+// Implementations of helpers
+static const mav_param_t* get_param_by_index(uint16_t index) {
+    if (index < PARAMS_COUNT) {
+        return &g_drone_params[index];
+    }
+    return NULL;
+}
+
+static const mav_param_t* get_param_by_id(const char* param_id) {
+    for (int i = 0; i < PARAMS_COUNT; i++) {
+        if (strncmp(param_id, g_drone_params[i].id, 16) == 0) {
+            return &g_drone_params[i];
+        }
+    }
+    return NULL;
 }
 
 static int send_mavlink_message(udp_client_t* client, mavlink_message_t* msg) {
@@ -227,6 +309,62 @@ int udp_client_receive(udp_client_t* client, udp_control_input_t* input) {
                         break;
                     }
                     
+                    case MAVLINK_MSG_ID_PARAM_REQUEST_LIST: {
+                        printf("MAVLink: PARAM_REQUEST_LIST\n");
+                        // Send all parameters
+                        for (uint16_t i = 0; i < PARAMS_COUNT; i++) {
+                            send_param_value(client, &g_drone_params[i], i);
+                            // Small delay to prevent flooding UDP
+                            usleep(1000); 
+                        }
+                        break;
+                    }
+
+                    case MAVLINK_MSG_ID_PARAM_REQUEST_READ: {
+                        mavlink_param_request_read_t request;
+                        mavlink_msg_param_request_read_decode(&msg, &request);
+                        
+                        if (request.param_index != -1) {
+                            // Request by index
+                            const mav_param_t* p = get_param_by_index(request.param_index);
+                            if (p) {
+                                send_param_value(client, p, request.param_index);
+                                printf("MAVLink: PARAM_REQUEST_READ (Index %d) -> %s\n", request.param_index, p->id);
+                            } else {
+                                printf("MAVLink: PARAM_REQUEST_READ (Index %d) -> Not Found\n", request.param_index);
+                            }
+                        } else {
+                            // Request by ID
+                            const mav_param_t* p = get_param_by_id(request.param_id);
+                            if (p) {
+                                // Find index for this param
+                                int idx = -1;
+                                for(int i=0; i<PARAMS_COUNT; i++) {
+                                    if(&g_drone_params[i] == p) { idx = i; break; }
+                                }
+                                send_param_value(client, p, idx);
+                                printf("MAVLink: PARAM_REQUEST_READ (ID %s)\n", request.param_id);
+                            } else {
+                                printf("MAVLink: PARAM_REQUEST_READ (ID %s) -> Not Found\n", request.param_id);
+                            }
+                        }
+                        break;
+                    }
+
+                    case MAVLINK_MSG_ID_MISSION_REQUEST_LIST: {
+                        // We don't support missions, but to stop the error/timeout:
+                        // Acknowledge with a count of 0
+                        mavlink_message_t ack_msg;
+                        mavlink_mission_request_list_t req;
+                        mavlink_msg_mission_request_list_decode(&msg, &req);
+                        
+                        mavlink_msg_mission_count_pack(MAV_SYSTEM_ID, MAV_COMPONENT_ID, &ack_msg,
+                                                     msg.sysid, msg.compid, 0, req.mission_type, 0);
+                        send_mavlink_message(client, &ack_msg);
+                        // Also send for FENCE and RALLY if needed by QGC logic, but usually MISSION type covers general check
+                        break;
+                    }
+
                     case MAVLINK_MSG_ID_COMMAND_LONG: {
                         mavlink_command_long_t packet;
                         mavlink_msg_command_long_decode(&msg, &packet);
