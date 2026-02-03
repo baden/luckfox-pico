@@ -208,9 +208,13 @@ static void serve_file(web_server_t* server, const char* path) {
     long fsize = ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    char header[256];
+    char header[512];
     snprintf(header, sizeof(header), 
-             "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %ld\r\nConnection: close\r\n\r\n", 
+             "HTTP/1.1 200 OK\r\n"
+             "Content-Type: %s\r\n"
+             "Content-Length: %ld\r\n"
+             "Access-Control-Allow-Origin: *\r\n"
+             "Connection: close\r\n\r\n", 
              get_mime_type(full_path), fsize);
     send(server->client_fd, header, strlen(header), 0);
 
