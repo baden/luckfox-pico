@@ -36,6 +36,9 @@ typedef struct {
     bool cmd_arm;
     bool cmd_disarm;
     bool cmd_takeoff;
+    bool cmd_set_mode;
+    uint8_t target_mode;      // MAVLink base_mode
+    uint32_t target_custom_mode;
 } udp_control_input_t;
 
 // Initialize UDP client
@@ -54,7 +57,7 @@ int udp_client_reconnect(udp_client_t* client);
 bool udp_client_is_connected(const udp_client_t* client);
 
 // Send Heartbeat
-int udp_client_send_heartbeat(udp_client_t* client, bool armed);
+int udp_client_send_heartbeat(udp_client_t* client, bool armed, uint8_t base_mode, uint32_t custom_mode);
 
 // Send Telemetry (Attitude/Status/GPS)
 int udp_client_send_telemetry(udp_client_t* client, float axis0, float axis1, 

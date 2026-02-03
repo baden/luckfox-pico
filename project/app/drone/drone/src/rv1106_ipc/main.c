@@ -19,6 +19,8 @@ typedef struct {
     float axis_0;           // Horizontal (-1.0..1.0)
     float axis_1;           // Vertical (-1.0..1.0)
     bool arm_state;         // ARM/DISARM state
+    uint8_t flight_mode;    // Current MAVLink base_mode
+    uint32_t custom_mode;   // Current MAVLink custom_mode
     lebidka_state_t lebidka_state;
     aktuator_state_t aktuator_state;
     pthread_mutex_t mutex;
@@ -66,6 +68,11 @@ static double get_time_seconds(void) {
 // Initialize all modules
 static int init_modules(void) {
     printf("Initializing modules...\n");
+
+    // Initialize default state
+    // Default to MANUAL_INPUT_ENABLED (64)
+    g_control.flight_mode = 64; 
+    g_control.custom_mode = 0;
     
     // Initialize CRSF
     if (crsf_init(&g_crsf, "/dev/ttyS3", 420000) != 0) {
@@ -219,9 +226,11 @@ static void* udp_thread_func(void* arg) {
         if (now - last_heartbeat >= 1.0) {
             pthread_mutex_lock(&g_control.mutex);
             bool is_armed = g_control.arm_state;
+            uint8_t current_mode = g_control.flight_mode;
+            uint32_t current_custom = g_control.custom_mode;
             pthread_mutex_unlock(&g_control.mutex);
             
-            udp_client_send_heartbeat(&g_udp, is_armed);
+            udp_client_send_heartbeat(&g_udp, is_armed, current_mode, current_custom);
             last_heartbeat = now;
         }
         
@@ -248,20 +257,41 @@ static void* udp_thread_func(void* arg) {
             // Check if CRSF has priority (last CRSF data < 5 seconds ago)
             bool crsf_has_priority = (get_time_seconds() - g_timing.last_crsf_time) < 5.0;
             
+            printf("UDP: received=%d, cmd_arm=%d, cmd_disarm=%d, crsf_priority=%d\n", 
+                   result, input.cmd_arm, input.cmd_disarm, crsf_has_priority);
+            
             if (!crsf_has_priority) {
+                // Handle Mode Change Requests
+                if (input.cmd_set_mode) {
+                    printf("UDP: Processing SET_MODE (Mode=%d, Custom=%d)\n", 
+                           input.target_mode, input.target_custom_mode);
+                    g_control.flight_mode = input.target_mode;
+                    g_control.custom_mode = input.target_custom_mode;
+                }
+
                 // Update ARM state from Commands
                 if (input.cmd_arm) {
+                    printf("UDP: Processing ARM command, current state=%d\n", g_control.arm_state);
                     if (!g_control.arm_state) {
                         g_control.arm_state = true;
                         play_buzzer_pattern((bool[]){true, false}, 2, 100);
-                        printf("ARMED via MAVLink\n");
+                        printf("UDP: ARMED via MAVLink - state changed to TRUE\n");
+                        
+                        // Force GUIDED/ARMED mode indicators for QGC
+                        // If in Manual (64), switch to Guided (16) if we just armed via MAVLink?
+                        // Actually, QGC usually sets mode THEN arms.
+                    } else {
+                        printf("UDP: Already armed, ignoring ARM command\n");
                     }
                 }
                 if (input.cmd_disarm) {
+                    printf("UDP: Processing DISARM command, current state=%d\n", g_control.arm_state);
                     if (g_control.arm_state) {
                         g_control.arm_state = false;
                         play_buzzer_pattern((bool[]){true, false, true, false}, 4, 100);
-                        printf("DISARMED via MAVLink\n");
+                        printf("UDP: DISARMED via MAVLink - state changed to FALSE\n");
+                    } else {
+                        printf("UDP: Already disarmed, ignoring DISARM command\n");
                     }
                 }
                 
@@ -473,9 +503,16 @@ int main(int argc, char *argv[])
         if (++counter >= 10) {
             counter = 0;
             
+            // Get current ARM state from heartbeat (actual state sent to QGC)
+            bool current_heartbeat_arm_state = false;
+            if (udp_client_is_connected(&g_udp)) {
+                // The heartbeat sends the actual ARM state
+                current_heartbeat_arm_state = g_control.arm_state;
+            }
+            
             pthread_mutex_lock(&g_control.mutex);
             printf("Status: ARM=%s, Axis0=%.2f, Axis1=%.2f, Lebidka=%d, Aktuator=%d\n",
-                   g_control.arm_state ? "ON" : "OFF",
+                   current_heartbeat_arm_state ? "ON" : "OFF",
                    g_control.axis_0, g_control.axis_1,
                    g_control.lebidka_state, g_control.aktuator_state);
             pthread_mutex_unlock(&g_control.mutex);

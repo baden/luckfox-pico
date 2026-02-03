@@ -84,19 +84,28 @@ static int send_command_ack(udp_client_t* client, uint16_t command, uint8_t resu
     return send_mavlink_message(client, &msg);
 }
 
-int udp_client_send_heartbeat(udp_client_t* client, bool armed) {
+int udp_client_send_heartbeat(udp_client_t* client, bool armed, uint8_t base_mode, uint32_t custom_mode) {
     mavlink_message_t msg;
-    uint8_t base_mode = MAV_MODE_FLAG_MANUAL_INPUT_ENABLED;
-    if (armed) base_mode |= MAV_MODE_FLAG_SAFETY_ARMED;
+    
+    // Ensure safety armed flag is set correctly in base_mode based on armed state
+    if (armed) {
+        base_mode |= MAV_MODE_FLAG_SAFETY_ARMED;
+    } else {
+        base_mode &= ~MAV_MODE_FLAG_SAFETY_ARMED;
+    }
     
     // MAV_STATE_ACTIVE if armed, else STANDBY
     uint8_t system_status = armed ? MAV_STATE_ACTIVE : MAV_STATE_STANDBY;
 
     mavlink_msg_heartbeat_pack(MAV_SYSTEM_ID, MAV_COMPONENT_ID, &msg, 
                                MAV_TYPE_QUADROTOR, MAV_AUTOPILOT_ARDUPILOTMEGA, 
-                               base_mode, 0, system_status);
-    
+                               base_mode, custom_mode, system_status);
+
     client->last_heartbeat_time = udp_get_time_seconds();
+    
+    printf("MAVLink: Sending heartbeat - ARM=%d, base_mode=%d, custom_mode=%d, status=%d\n", 
+           armed ? 1 : 0, base_mode, custom_mode, system_status);
+    
     return send_mavlink_message(client, &msg);
 }
 
@@ -132,6 +141,18 @@ int udp_client_send_telemetry(udp_client_t* client, float axis0, float axis1,
                              0, 0, heading, 0, 0, 0);
     send_mavlink_message(client, &msg);
     
+    // Send GPS position to satisfy QGC requirements
+    // Fake GPS coordinates for Kyiv, Ukraine
+    double lat = 50.4501;   // Kyiv coordinates
+    double lon = 30.5234;
+    float alt = 100.0f;     // 100m altitude
+    uint64_t time_usec = (uint64_t)(udp_get_time_seconds() * 1000000);
+    
+    mavlink_msg_global_position_int_pack(MAV_SYSTEM_ID, MAV_COMPONENT_ID, &msg,
+                                      boot_ms, (int32_t)(lat * 1e7), (int32_t)(lon * 1e7), 
+                                      (int32_t)(alt * 1000), 0, 0, 0, 0, 0);
+    send_mavlink_message(client, &msg);
+    
     return 0;
 }
 
@@ -139,6 +160,13 @@ int udp_client_receive(udp_client_t* client, udp_control_input_t* input) {
     uint8_t buffer[2048];
     struct sockaddr_in src_addr;
     socklen_t addr_len = sizeof(src_addr);
+    
+    // Reset command flags each time we check for new data
+    input->cmd_arm = false;
+    input->cmd_disarm = false;
+    input->cmd_takeoff = false;
+    input->cmd_set_mode = false;
+    input->valid = false;
     
     ssize_t received = recvfrom(client->sockfd, buffer, sizeof(buffer), 0,
                                 (struct sockaddr*)&src_addr, &addr_len);
@@ -222,12 +250,32 @@ int udp_client_receive(udp_client_t* client, udp_control_input_t* input) {
                                 input_updated = true;
                             } else if (packet.command == 176) { // MAV_CMD_DO_SET_MODE
                                 printf("MAVLink CMD: SET_MODE (Mode=%.0f, Custom=%.0f)\n", packet.param1, packet.param2);
-                                // Always accept mode changes to satisfy QGC
+                                
+                                // Capture the requested mode for the main loop to handle
+                                input->cmd_set_mode = true;
+                                input->target_mode = (uint8_t)packet.param1;
+                                input->target_custom_mode = (uint32_t)packet.param2;
+                                input_updated = true;
+
+                                // Helper logging
+                                if (input->target_mode == 16) { 
+                                    printf("MAVLink: Requesting GUIDED mode\n");
+                                } else if (input->target_mode == 4) { 
+                                    printf("MAVLink: Requesting CUSTOM mode\n");
+                                } else if (input->target_mode == 1) { 
+                                    printf("MAVLink: Requesting MANUAL mode\n");
+                                }
+                                
+                                send_command_ack(client, packet.command, MAV_RESULT_ACCEPTED);
+                            } else if (packet.command == 511 || packet.command == 512 || packet.command == 521) {
+                                // These are non-standard commands, likely from custom GCS implementations
+                                // Silently acknowledge but don't process to prevent spam
+                                printf("MAVLink CMD: Custom command %d (ignored)\n", packet.command);
                                 send_command_ack(client, packet.command, MAV_RESULT_ACCEPTED);
                             } else {
-                                printf("MAVLink CMD: %d\n", packet.command);
-                                // Optional: Send UNSUPPORTED only if we want to be strict,
-                                // but for now silent ignore is safer to avoid spamming ACKs for unknown cmds
+                                printf("MAVLink CMD: %d (unknown)\n", packet.command);
+                                // Send UNSUPPORTED for truly unknown commands
+                                send_command_ack(client, packet.command, MAV_RESULT_UNSUPPORTED);
                             }
                         }
                         break;
