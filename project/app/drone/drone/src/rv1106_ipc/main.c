@@ -267,6 +267,15 @@ static void* udp_thread_func(void* arg) {
                            input.target_mode, input.target_custom_mode);
                     g_control.flight_mode = input.target_mode;
                     g_control.custom_mode = input.target_custom_mode;
+
+                    // Auto-disarm if switched to LAND mode (ArduCopter mode 9)
+                    // Mode 9 is LAND. QGC switches to this mode when "Land" is pressed.
+                    // Since we don't have physical landing logic, we simulate landing by disarming.
+                    if (g_control.custom_mode == 9 && g_control.arm_state) {
+                        printf("UDP: LAND mode detected. Simulating landing -> Disarming.\n");
+                        g_control.arm_state = false;
+                        play_buzzer_pattern((bool[]){true, false, true, false}, 4, 100);
+                    }
                 }
 
                 // Update ARM state from Commands
