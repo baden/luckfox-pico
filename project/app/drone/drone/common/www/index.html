@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drone Control</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+                video-rtc {
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: black;
+            border-radius: 4px;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Drone Control</h1>
+        <!--iframe
+            src="http://10.8.0.2:1984/stream.html?src=front_a&mode=webrtc"
+            width="640"
+            height="480"
+            frameborder="0"
+            allowfullscreen>
+        </iframe-->
+
+    <div class="dashboard">
+        <!-- Блок камери FRONT -->
+        <div class="cam-container">
+            <video-stream id="front" muted autoplay controls></video-stream>
+            <div class="btn-group">
+                <button onclick="changeStream('front', 'front')">HD</button>
+                <button onclick="changeStream('front', 'front_a')">SD</button>
+                <button class="stop" onclick="stopStream('front')">STOP</button>
+            </div>
+        </div>
+
+        <!-- Блок камери REAR -->
+        <div class="cam-container">
+            <video-stream id="rear" muted autoplay controls></video-stream>
+            <div class="btn-group">
+                <button onclick="changeStream('rear', 'rear')">HD</button>
+                <button onclick="changeStream('rear', 'rear_a')">SD</button>
+                <button class="stop" onclick="stopStream('rear')">STOP</button>
+            </div>
+        </div>
+
+        <!-- Блок камери BACK -->
+        <div class="cam-container">
+            <video-stream id="back" muted autoplay controls></video-stream>
+            <div class="btn-group">
+                <button onclick="changeStream('back', 'back')">HD</button>
+                <button onclick="changeStream('back', 'back_a')">SD</button>
+                <button class="stop" onclick="stopStream('rear')">STOP</button>
+            </div>
+        </div>
+    </div>
+
+        <div class="block">
+            <span id="gamepad-icon" class="gamepad-icon disconnected">
+                <svg class="svg-icon" style="width: 48px; height: 48px; vertical-align: middle; fill: currentColor; overflow: hidden;" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M941 469.9c-43.9-197.4-105.9-246.1-143.6-265.6C737 173 666.9 191.2 643.7 203c-26.4 13.3-44.2 38.7-71 49.7-31 12.7-73.2 16.1-104.9 0.8-25.3-12.2-47.6-38.3-78.2-49.9-38.8-14.7-103.5-35.2-167.4 9.7C207 224 99.1 312.6 66.8 589.6c-20 170.8 75.5 225.7 72 223.2 24.6 17.3 79.6 46.4 154.2 0.7 49.8-30.5 90.3-90.9 90.3-90.9s18-33.6 42-47.8c16.9-10.1 42.3-2.4 42.3-2.4h89.7s28.5-3.5 48.4 5.1c19.4 8.3 30.4 28.8 30.4 28.8s59.1 74.9 115.7 113c24.1 16.2 121 34.9 171.1-25 32.5-39.1 54.8-159.6 18.1-324.4z m-479-17.5c0 15-12.2 27.1-27.2 27.1h-67.9v68c0 15-12.2 27.2-27.2 27.2h-20.4c-15 0-27.2-12.1-27.2-27.2v-68h-67.9c-15 0-27.2-12.1-27.2-27.1V432c0-15 12.2-27.2 27.2-27.2h67.9v-67.9c0-15 12.2-27.2 27.2-27.2h20.4c15 0 27.2 12.2 27.2 27.2v67.9h67.9c15 0 27.2 12.1 27.2 27.2v20.4z m191.4 95.1c-28.1 0-50.9-22.8-50.9-51 0-28.1 22.8-50.9 50.9-50.9 28.1 0 50.9 22.8 50.9 50.9 0 28.2-22.8 51-50.9 51z m93.4-113.2c-27.8 0-50.4-22.6-50.4-50.4s22.6-50.3 50.4-50.3c27.8 0 50.4 22.6 50.4 50.3-0.1 27.8-22.6 50.4-50.4 50.4z" fill="currentColor"/>
+                </svg>
+            </span>
+            <span id="gamepad-status">Очікування підключення джойстика...</span>
+        </div>
+        <div class="block">
+            <span id="connection-status">Очікування підключення до сервера...</span>
+        </div>
+        <div class="block">
+            <span id="drone-status">Очікування підключення до дрону...</span>
+        </div>
+
+        <div id="axes-display" class="control-group">
+            <h2>Осі</h2>
+            <div id="axis0" class="control-item">A0: 0</div>
+            <div id="axis1" class="control-item">A1: 0</div>
+            <div id="axis2" class="control-item">A2: 0</div>
+            <div id="axis3" class="control-item">A3: 0</div>
+            <!-- Додайте більше осей за потреби -->
+        </div>
+
+        <div id="buttons-display" class="control-group">
+            <h2>Кнопки</h2>
+            <div id="button0" class="control-item button-item">B0: -</div>
+            <div id="button1" class="control-item button-item">B1: -</div>
+            <!-- Додайте більше кнопок за потреби -->
+        </div>
+        <div class="block">
+            <button id="settings-btn" class="settings-button" title="Налаштування">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle;">
+                    <path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7zm7.43-2.88l-1.34-.52a6.98 6.98 0 0 0 0-2.2l1.34-.52a.5.5 0 0 0 .28-.65l-1.28-2.22a.5.5 0 0 0-.61-.22l-1.34.52a7.03 7.03 0 0 0-1.9-1.1l-.2-1.42A.5.5 0 0 0 14.5 4h-2.99a.5.5 0 0 0-.5.42l-.2 1.42a7.03 7.03 0 0 0-1.9 1.1l-1.34-.52a.5.5 0 0 0-.61.22l-1.28 2.22a.5.5 0 0 0 .28.65l1.34.52a6.98 6.98 0 0 0 0 2.2l-1.34.52a.5.5 0 0 0-.28.65l1.28 2.22a.5.5 0 0 0 .61.22l1.34-.52c.58.45 1.22.82 1.9 1.1l.2 1.42a.5.5 0 0 0 .5.42h2.99a.5.5 0 0 0 .5-.42l.2-1.42a7.03 7.03 0 0 0 1.9-1.1l1.34.52a.5.5 0 0 0 .61-.22l1.28-2.22a.5.5 0 0 0-.28-.65z" fill="currentColor"/>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Модальне вікно налаштувань -->
+        <div id="settings-modal" class="modal" style="display:none;">
+            <div class="modal-content">
+                <h2>Налаштування</h2>
+                <label for="drone-id">ID дрона:</label>
+                <input type="text" id="drone-id" name="drone-id" placeholder="Введіть ID дрона">
+                <br><br>
+                <button id="close-settings">&times; Закрити</button>
+                <button id="restart-drone" class="restart-button">Перезапустити дрон</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+    <!-- <script type="module" src="http://10.8.0.2:1984/video-rtc.js"></script> -->
+    <!-- <script type="module" src="http://localhost:1984/video-rtc.js"></script> -->
+
+    <script type="module" src="http://10.8.0.2:1984/video-stream.js"></script>
+
+<script type="module">
+        const API_URL = 'http://10.8.0.2:1984/api/ws?src=';
+
+        window.changeStream = function(elementId, streamName) {
+            const el = document.getElementById(elementId);
+            const newSrc = API_URL + streamName;
+
+            // 1. Повністю зупиняємо поточне з'єднання
+            el.ondisconnect();
+
+            // 2. Даємо браузеру мікропаузу для очищення (опційно, але надійно)
+            setTimeout(() => {
+                el.src = newSrc;
+            }, 50);
+
+            // Візуально підсвічуємо кнопки (опційно)
+            updateUI(elementId, streamName);
+        }
+
+        window.stopStream = function(elementId) {
+            const el = document.getElementById(elementId);
+            // Викликаємо метод зупинки з базового класу VideoRTC
+            el.ondisconnect();
+            el.wsURL = ''; // Очищаємо, щоб не було автореконекту
+            console.log(elementId + ' зупинено');
+        }
+
+        function updateUI(id, name) {
+            console.log(`Підключення ${id} до ${name}...`);
+        }
+    </script>
+</body>
+</html>

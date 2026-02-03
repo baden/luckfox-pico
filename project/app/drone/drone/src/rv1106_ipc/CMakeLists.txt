@@ -7,6 +7,7 @@ set(COMMON_SOURCES
     ${PROJECT_SOURCE_DIR}/common/gpio_control.c
     ${PROJECT_SOURCE_DIR}/common/pwm_control.c
     ${PROJECT_SOURCE_DIR}/common/uart_utils.c
+    ${PROJECT_SOURCE_DIR}/common/web_server.c
 )
 
 # Add main source file

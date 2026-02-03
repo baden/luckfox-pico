@@ -13,6 +13,7 @@
 #include "../../common/gpio_control.h"
 #include "../../common/pwm_control.h"
 #include "../../common/drone_types.h"
+#include "../../common/web_server.h"
 
 // Global control state
 typedef struct {
@@ -31,6 +32,7 @@ typedef struct {
 typedef struct {
     double last_crsf_time;
     double last_udp_time;
+    double last_web_time;
     double last_control_time;
     bool network_timeout;
     double arm_start_time;
@@ -45,10 +47,12 @@ static crsf_t g_crsf = {0};
 static udp_client_t g_udp = {0};
 static gpio_control_t g_gpio = {0};
 static pwm_control_t g_pwm = {0};
+static web_server_t g_web = {0};
 
 // Thread handles
 static pthread_t crsf_thread;
 static pthread_t udp_thread;
+static pthread_t web_thread;
 static pthread_t control_thread;
 static pthread_t watchdog_thread;
 
@@ -98,6 +102,13 @@ static int init_modules(void) {
         return -1;
     }
     
+    // Initialize Web Server
+    // Port 80, serving /oem/usr/share/drone/www
+    if (web_server_init(&g_web, 80, "/oem/usr/share/drone/www") != 0) {
+        fprintf(stderr, "Failed to initialize Web Server on port 80\n");
+        printf("Continuing without Web control\n");
+    }
+    
     // Initialize mutex
     pthread_mutex_init(&g_control.mutex, NULL);
     
@@ -111,6 +122,7 @@ static void cleanup_modules(void) {
     
     crsf_cleanup(&g_crsf);
     udp_client_cleanup(&g_udp);
+    web_server_cleanup(&g_web);
     gpio_control_cleanup(&g_gpio);
     pwm_control_cleanup(&g_pwm);
     
@@ -220,7 +232,7 @@ static void* udp_thread_func(void* arg) {
     
     while (!g_control.should_exit) {
         if (!udp_client_is_connected(&g_udp)) {
-            printf("UDP disconnected, attempting to reconnect...\n");
+            // printf("UDP disconnected, attempting to reconnect...\n");
             if (udp_client_reconnect(&g_udp) != 0) {
                 sleep(5);
                 continue;
@@ -261,30 +273,26 @@ static void* udp_thread_func(void* arg) {
         if (result > 0) {
             pthread_mutex_lock(&g_control.mutex);
             
-            // Check if CRSF has priority (last CRSF data < 10 seconds ago)
-            // But also check if CRSF is actually *fresh* (e.g. < 1.0s) to handle the deadzone
-            double time_since_crsf = get_time_seconds() - g_timing.last_crsf_time;
+            double now = get_time_seconds();
+            double time_since_crsf = now - g_timing.last_crsf_time;
+            double time_since_web = now - g_timing.last_web_time;
+            
             bool crsf_has_priority = time_since_crsf < 10.0;
             bool crsf_is_fresh = time_since_crsf < 1.0;
-            
-            // printf("UDP: received=%d, cmd_arm=%d, cmd_disarm=%d, crsf_priority=%d\n", 
-            //        result, input.cmd_arm, input.cmd_disarm, crsf_has_priority);
+            bool web_has_priority = time_since_web < 2.0; // Web has 2s priority over UDP
             
             if (crsf_has_priority) {
-                // We are in the priority window.
                 if (!crsf_is_fresh) {
                     // DEADZONE: RC was active recently, but signal is lost now.
-                    // We haven't switched to UDP yet (waiting for 10s timeout).
-                    // FAILSAFE: Force axes to neutral to prevent fly-away.
+                    // FAILSAFE: Force axes to neutral
                     if (g_control.arm_state) {
                          g_control.axis_0 = 0.0f;
                          g_control.axis_1 = 0.0f;
-                         // printf("UDP: RC Lost (Deadzone) - Centering controls\n");
                     }
                 }
-                // Else: RC is driving, ignore UDP.
-            } else {
-                // UDP takes over
+            } else if (!web_has_priority) {
+                // UDP takes over only if no CRSF and no Web
+                
                 // Handle Mode Change Requests
                 if (input.cmd_set_mode) {
                     printf("UDP: Processing SET_MODE (Mode=%d, Custom=%d)\n", 
@@ -292,9 +300,6 @@ static void* udp_thread_func(void* arg) {
                     g_control.flight_mode = input.target_mode;
                     g_control.custom_mode = input.target_custom_mode;
 
-                    // Auto-disarm if switched to LAND mode (ArduCopter mode 9)
-                    // Mode 9 is LAND. QGC switches to this mode when "Land" is pressed.
-                    // Since we don't have physical landing logic, we simulate landing by disarming.
                     if (g_control.custom_mode == 9 && g_control.arm_state) {
                         printf("UDP: LAND mode detected. Simulating landing -> Disarming.\n");
                         g_control.arm_state = false;
@@ -304,41 +309,25 @@ static void* udp_thread_func(void* arg) {
 
                 // Update ARM state from Commands
                 if (input.cmd_arm) {
-                    printf("UDP: Processing ARM command, current state=%d\n", g_control.arm_state);
                     if (!g_control.arm_state) {
                         g_control.arm_state = true;
                         play_buzzer_pattern((bool[]){true, false}, 2, 100);
-                        printf("UDP: ARMED via MAVLink - state changed to TRUE\n");
-                        
-                        // Force GUIDED/ARMED mode indicators for QGC
-                        // If in Manual (64), switch to Guided (16) if we just armed via MAVLink?
-                        // Actually, QGC usually sets mode THEN arms.
-                    } else {
-                        printf("UDP: Already armed, ignoring ARM command\n");
+                        printf("UDP: ARMED via MAVLink\n");
                     }
                 }
                 if (input.cmd_disarm) {
-                    printf("UDP: Processing DISARM command, current state=%d\n", g_control.arm_state);
                     if (g_control.arm_state) {
                         g_control.arm_state = false;
                         play_buzzer_pattern((bool[]){true, false, true, false}, 4, 100);
-                        printf("UDP: DISARMED via MAVLink - state changed to FALSE\n");
-                    } else {
-                        printf("UDP: Already disarmed, ignoring DISARM command\n");
+                        printf("UDP: DISARMED via MAVLink\n");
                     }
                 }
                 
                 // Update Axes
                 if (input.valid && g_control.arm_state) {
-                    // Map UDP axes to control axes
-                    // CRSF maps: axis0=Roll, axis1=Pitch
-                    // UDP client maps: axes[0]=Pitch, axes[1]=Roll
-                    // So we swap them here to match CRSF logic
+                    // Map UDP axes to control axes (Swap Pitch/Roll)
                     g_control.axis_0 = input.axes[1]; // Roll
                     g_control.axis_1 = input.axes[0]; // Pitch
-                    
-                    // Note: buttons not fully mapped to winch yet, relying on CRSF logic mostly
-                    // Could map buttons from input.buttons if needed
                 } else if (!g_control.arm_state) {
                     g_control.axis_0 = 0.0f;
                     g_control.axis_1 = 0.0f;
@@ -355,6 +344,90 @@ static void* udp_thread_func(void* arg) {
     }
     
     printf("UDP thread exiting\n");
+    return NULL;
+}
+
+// Web Server Thread
+static void* web_thread_func(void* arg) {
+    printf("Web Server thread started\n");
+    
+    double last_telemetry = 0;
+    
+    while (!g_control.should_exit) {
+        
+        web_control_input_t input = {0};
+        web_server_run_step(&g_web, &input);
+        
+        double now = get_time_seconds();
+        
+        // Send telemetry (10Hz) to connected client
+        if (now - last_telemetry >= 0.1) {
+            pthread_mutex_lock(&g_control.mutex);
+            float a0 = g_control.axis_0;
+            float a1 = g_control.axis_1;
+            float a2 = 0; // Throttle not tracked in control_state yet
+            float a3 = 0; // Yaw not tracked
+            bool armed = g_control.arm_state;
+            pthread_mutex_unlock(&g_control.mutex);
+            
+            web_server_send_telemetry(&g_web, a0, a1, a3, a2, armed);
+            last_telemetry = now;
+        }
+        
+        if (input.valid) {
+            pthread_mutex_lock(&g_control.mutex);
+            
+            double time_since_crsf = now - g_timing.last_crsf_time;
+            bool crsf_has_priority = time_since_crsf < 10.0;
+            bool crsf_is_fresh = time_since_crsf < 1.0;
+            
+            if (crsf_has_priority) {
+                // Ignore Web, but if DEADZONE, handled by CRSF thread or UDP checks
+                // Actually we should handle deadzone here too if we want robustness,
+                // but CRSF/UDP threads check failsafe.
+            } else {
+                // Web has priority over UDP implicitly by being processed here and setting timestamp
+                
+                // Handle ARM/DISARM
+                if (input.cmd_arm && !g_control.arm_state) {
+                    g_control.arm_state = true;
+                    play_buzzer_pattern((bool[]){true, false}, 2, 100);
+                    printf("Web: ARMED\n");
+                }
+                if (input.cmd_disarm && g_control.arm_state) {
+                    g_control.arm_state = false;
+                    play_buzzer_pattern((bool[]){true, false, true, false}, 4, 100);
+                    printf("Web: DISARMED\n");
+                }
+                
+                // Axes
+                if (g_control.arm_state) {
+                    g_control.axis_0 = input.axes[0]; // Assuming Web sends Roll on 0
+                    g_control.axis_1 = input.axes[1]; // Pitch on 1
+                    
+                    // Aux
+                    if (input.lebidka_val < 0) g_control.lebidka_state = LEBIDKA_STATE_UP;
+                    else if (input.lebidka_val > 0) g_control.lebidka_state = LEBIDKA_STATE_DOWN;
+                    else g_control.lebidka_state = LEBIDKA_STATE_NEUTRAL;
+                    
+                    if (input.aktuator_val < 0) g_control.aktuator_state = AKTUATOR_STATE_FORWARD;
+                    else if (input.aktuator_val > 0) g_control.aktuator_state = AKTUATOR_STATE_BACKWARD;
+                    else g_control.aktuator_state = AKTUATOR_STATE_NEUTRAL;
+                } else {
+                    g_control.axis_0 = 0.0f;
+                    g_control.axis_1 = 0.0f;
+                }
+                
+                g_timing.last_web_time = now;
+            }
+            
+            pthread_mutex_unlock(&g_control.mutex);
+        }
+        
+        usleep(5000); // 5ms
+    }
+    
+    printf("Web thread exiting\n");
     return NULL;
 }
 
@@ -422,8 +495,9 @@ static void* watchdog_thread_func(void* arg) {
     while (!g_control.should_exit) {
         double current_time = get_time_seconds();
         
-        // Determine last control time
-        g_timing.last_control_time = fmax(g_timing.last_crsf_time, g_timing.last_udp_time);
+        // Determine last control time (max of CRSF, UDP, Web)
+        double last_net = fmax(g_timing.last_udp_time, g_timing.last_web_time);
+        g_timing.last_control_time = fmax(g_timing.last_crsf_time, last_net);
         
         // Check for timeout
         double time_since_last_control = current_time - g_timing.last_control_time;
@@ -479,7 +553,7 @@ int main(int argc, char *argv[])
     setvbuf(stdout, NULL, _IOLBF, 0);
     setvbuf(stderr, NULL, _IOLBF, 0);
 
-    printf("Starting drone C application (MAVLink enabled)...\n");
+    printf("Starting drone C application (MAVLink + Web enabled)...\n");
     
     if (init_modules() != 0) {
         fprintf(stderr, "Failed to initialize modules\n");
@@ -503,11 +577,21 @@ int main(int argc, char *argv[])
         return 1;
     }
     
+    if (pthread_create(&web_thread, NULL, web_thread_func, NULL) != 0) {
+        fprintf(stderr, "Failed to create Web thread\n");
+        g_control.should_exit = true;
+        pthread_join(crsf_thread, NULL);
+        pthread_join(udp_thread, NULL);
+        cleanup_modules();
+        return 1;
+    }
+    
     if (pthread_create(&control_thread, NULL, control_thread_func, NULL) != 0) {
         fprintf(stderr, "Failed to create control thread\n");
         g_control.should_exit = true;
         pthread_join(crsf_thread, NULL);
         pthread_join(udp_thread, NULL);
+        pthread_join(web_thread, NULL);
         cleanup_modules();
         return 1;
     }
@@ -517,6 +601,7 @@ int main(int argc, char *argv[])
         g_control.should_exit = true;
         pthread_join(crsf_thread, NULL);
         pthread_join(udp_thread, NULL);
+        pthread_join(web_thread, NULL);
         pthread_join(control_thread, NULL);
         cleanup_modules();
         return 1;
@@ -550,9 +635,10 @@ int main(int argc, char *argv[])
                    g_control.lebidka_state, g_control.aktuator_state);
             pthread_mutex_unlock(&g_control.mutex);
             
-            printf("Connections: CRSF=%s, UDP=%s\n",
+            printf("Connections: CRSF=%s, UDP=%s, Web=%s\n",
                    crsf_is_connected(&g_crsf) ? "OK" : "DISCONNECTED",
-                   udp_client_is_connected(&g_udp) ? "OK" : "DISCONNECTED");
+                   udp_client_is_connected(&g_udp) ? "OK" : "DISCONNECTED",
+                   g_web.connected ? "CONNECTED" : "WAITING");
         }
     }
 
@@ -564,6 +650,7 @@ int main(int argc, char *argv[])
     // Wait for all threads to finish
     pthread_join(crsf_thread, NULL);
     pthread_join(udp_thread, NULL);
+    pthread_join(web_thread, NULL);
     pthread_join(control_thread, NULL);
     pthread_join(watchdog_thread, NULL);
     
