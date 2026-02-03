@@ -7,3 +7,6 @@
 [submodule "project/app/component/third_libs/ssd1306"]
 	path = project/app/component/third_libs/ssd1306
 	url = https://github.com/lexus2k/ssd1306.git
+[submodule "project/app/component/third_libs/u8g2"]
+	path = project/app/component/third_libs/u8g2
+	url = https://github.com/olikraus/u8g2.git

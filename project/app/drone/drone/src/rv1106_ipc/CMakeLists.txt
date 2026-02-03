@@ -19,10 +19,17 @@ set(COMMON_SOURCES
     ${PROJECT_SOURCE_DIR}/common/ssd1306/ssd1306_1bit.c
     ${PROJECT_SOURCE_DIR}/common/ssd1306/ssd1306_generic.c
     ${PROJECT_SOURCE_DIR}/common/ssd1306/ssd1306_fonts.c
+
+    ${PROJECT_SOURCE_DIR}/common/u8g2/sys/linux-fb/common/u8x8_d_framebuffer.c
+)
+
+file(GLOB U2G2_SOURCES
+    ${PROJECT_SOURCE_DIR}/common/u8g2/csrc/*.c
 )
 
 # Add main source file
 set(MAIN_SOURCES
+    ${U2G2_SOURCES}
     ./main.c
 )
 
@@ -34,6 +41,7 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/common
     ${PROJECT_SOURCE_DIR}/common/mongoose
     ${PROJECT_SOURCE_DIR}/common/ssd1306
+    ${PROJECT_SOURCE_DIR}/common/u8g2/csrc
 )
 
 # Add definitions for drone application
