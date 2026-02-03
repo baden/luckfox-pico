@@ -215,8 +215,8 @@ int udp_client_send_heartbeat(udp_client_t* client, bool armed, uint8_t base_mod
 
     client->last_heartbeat_time = udp_get_time_seconds();
     
-    printf("MAVLink: Sending heartbeat - ARM=%d, base_mode=%d, custom_mode=%d, status=%d\n", 
-           armed ? 1 : 0, base_mode, custom_mode, system_status);
+    // printf("MAVLink: Sending heartbeat - ARM=%d, base_mode=%d, custom_mode=%d, status=%d\n", 
+    //        armed ? 1 : 0, base_mode, custom_mode, system_status);
     
     return send_mavlink_message(client, &msg);
 }
@@ -307,8 +307,8 @@ int udp_client_receive(udp_client_t* client, udp_control_input_t* input) {
                         input->timestamp = udp_get_time_seconds();
                         input_updated = true;
                         
-                        printf("MAVLink: MANUAL_CONTROL R=%.2f P=%.2f T=%.2f Y=%.2f Btn=%d\n",
-                               input->axes[1], input->axes[0], input->axes[2], input->axes[3], input->buttons);
+                        // printf("MAVLink: MANUAL_CONTROL R=%.2f P=%.2f T=%.2f Y=%.2f Btn=%d\n",
+                        //       input->axes[1], input->axes[0], input->axes[2], input->axes[3], input->buttons);
                         break;
                     }
                     
@@ -438,7 +438,8 @@ int udp_client_receive(udp_client_t* client, udp_control_input_t* input) {
                             } else if (packet.command == 511 || packet.command == 512 || packet.command == 521) {
                                 // These are non-standard commands, likely from custom GCS implementations
                                 // Silently acknowledge but don't process to prevent spam
-                                printf("MAVLink CMD: Custom command %d (ignored)\n", packet.command);
+                                // 511 is MAV_CMD_SET_MESSAGE_INTERVAL - usually safe to ignore for simple implementations
+                                // printf("MAVLink CMD: Custom command %d (ignored)\n", packet.command);
                                 send_command_ack(client, packet.command, MAV_RESULT_ACCEPTED);
                             } else {
                                 printf("MAVLink CMD: %d (unknown)\n", packet.command);

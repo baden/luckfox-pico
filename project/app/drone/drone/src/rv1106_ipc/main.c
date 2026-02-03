@@ -254,11 +254,11 @@ static void* udp_thread_func(void* arg) {
         if (result > 0) {
             pthread_mutex_lock(&g_control.mutex);
             
-            // Check if CRSF has priority (last CRSF data < 5 seconds ago)
-            bool crsf_has_priority = (get_time_seconds() - g_timing.last_crsf_time) < 5.0;
+            // Check if CRSF has priority (last CRSF data < 10 seconds ago)
+            bool crsf_has_priority = (get_time_seconds() - g_timing.last_crsf_time) < 10.0;
             
-            printf("UDP: received=%d, cmd_arm=%d, cmd_disarm=%d, crsf_priority=%d\n", 
-                   result, input.cmd_arm, input.cmd_disarm, crsf_has_priority);
+            // printf("UDP: received=%d, cmd_arm=%d, cmd_disarm=%d, crsf_priority=%d\n", 
+            //        result, input.cmd_arm, input.cmd_disarm, crsf_has_priority);
             
             if (!crsf_has_priority) {
                 // Handle Mode Change Requests
@@ -306,12 +306,12 @@ static void* udp_thread_func(void* arg) {
                 
                 // Update Axes
                 if (input.valid && g_control.arm_state) {
-                    g_control.axis_0 = input.axes[0]; // Pitch? Or Roll? 
-                    g_control.axis_1 = input.axes[1]; // Roll? Or Pitch?
-                    
-                    // We need to verify mapping. 
+                    // Map UDP axes to control axes
+                    // CRSF maps: axis0=Roll, axis1=Pitch
                     // UDP client maps: axes[0]=Pitch, axes[1]=Roll
-                    // Drone mixer: Left=axis0+axis1, Right=axis1-axis0
+                    // So we swap them here to match CRSF logic
+                    g_control.axis_0 = input.axes[1]; // Roll
+                    g_control.axis_1 = input.axes[0]; // Pitch
                     
                     // Note: buttons not fully mapped to winch yet, relying on CRSF logic mostly
                     // Could map buttons from input.buttons if needed
