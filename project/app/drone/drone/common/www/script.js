@@ -149,7 +149,7 @@ if ('wakeLock' in navigator) {
 function prepareData(gamepad) {
     if (!gamepad) return null;
     const round3 = v => Math.round(v * 1000) / 1000;
-    console.log("gamepad.axes", gamepad.axes);
+    // console.log("gamepad.axes", gamepad.axes);
     if (gamepad.axes.length === 7 && gamepad.buttons.length === 24) {
         // Комбінація для [7,24]
         return {
@@ -252,7 +252,7 @@ function updateGamepadStatus() {
             // axes[0]: RH (Roll), axes[1]: RV (Pitch), axes[2]: LV (Throttle), axes[3]: LH (Yaw)
             // buttons[3]: D (Right Button) -> mapped to ARM
             // Using "arm" key handles both arm (true) and disarm (false) in C backend
-            console.log("Sending data:", processedData);
+            // console.log("Sending data:", processedData);
             const data = {
                 // arm: processedData.buttons[3] === 1,
                 arm: processedData.buttons[0] === 1,

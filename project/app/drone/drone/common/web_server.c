@@ -107,6 +107,7 @@ int web_server_init(web_server_t* server, int port, const char* www_root) {
     server->www_root = www_root;
     
     mg_mgr_init(&server->mgr);
+    mg_log_set(MG_LL_ERROR); // Disable debug logs to reduce spam
     
     char url[32];
     snprintf(url, sizeof(url), "0.0.0.0:%d", port);
