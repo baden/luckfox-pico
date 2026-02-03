@@ -45,6 +45,36 @@ static mav_param_t g_drone_params[] = {
     // Compass ID (even if fake)
     {"COMPASS_DEV_ID", 1.0f, MAV_PARAM_TYPE_INT32},
 
+    // Missing params requested by QGC
+    {"COMPASS_USE",     1.0f, MAV_PARAM_TYPE_INT8},
+    {"COMPASS_DEV_ID2", 0.0f, MAV_PARAM_TYPE_INT32},
+    {"COMPASS_DEV_ID3", 0.0f, MAV_PARAM_TYPE_INT32},
+    
+    {"INS_ACCOFFS_X", 0.0f, MAV_PARAM_TYPE_REAL32},
+    {"INS_ACCOFFS_Y", 0.0f, MAV_PARAM_TYPE_REAL32},
+    {"INS_ACCOFFS_Z", 0.0f, MAV_PARAM_TYPE_REAL32},
+    
+    {"FLTMODE1",      0.0f, MAV_PARAM_TYPE_INT8}, // Stabilize
+    {"FLTMODE2",      0.0f, MAV_PARAM_TYPE_INT8},
+    {"FLTMODE3",      0.0f, MAV_PARAM_TYPE_INT8},
+    {"FLTMODE4",      0.0f, MAV_PARAM_TYPE_INT8},
+    {"FLTMODE5",      0.0f, MAV_PARAM_TYPE_INT8},
+    {"FLTMODE6",      0.0f, MAV_PARAM_TYPE_INT8},
+    
+    {"COMPASS_OFS_X", 0.0f, MAV_PARAM_TYPE_REAL32},
+    {"COMPASS_OFS_Y", 0.0f, MAV_PARAM_TYPE_REAL32},
+    {"COMPASS_OFS_Z", 0.0f, MAV_PARAM_TYPE_REAL32},
+    {"COMPASS_OFS2_X",0.0f, MAV_PARAM_TYPE_REAL32},
+    {"COMPASS_OFS2_Y",0.0f, MAV_PARAM_TYPE_REAL32},
+    {"COMPASS_OFS2_Z",0.0f, MAV_PARAM_TYPE_REAL32},
+    {"COMPASS_OFS3_X",0.0f, MAV_PARAM_TYPE_REAL32},
+    {"COMPASS_OFS3_Y",0.0f, MAV_PARAM_TYPE_REAL32},
+    {"COMPASS_OFS3_Z",0.0f, MAV_PARAM_TYPE_REAL32},
+    
+    {"COMPASS_DEC",   0.0f, MAV_PARAM_TYPE_REAL32},
+    {"BATT_MONITOR",  0.0f, MAV_PARAM_TYPE_INT8},
+    {"ARMING_CHECK",  0.0f, MAV_PARAM_TYPE_INT32},
+
     {"TEST_SENS_R",   1.0f, MAV_PARAM_TYPE_REAL32}, // Test param: Roll sensitivity
     {"TEST_SENS_P",   1.0f, MAV_PARAM_TYPE_REAL32}, // Test param: Pitch sensitivity
     {"LEBIDKA_SPEED", 50.0f, MAV_PARAM_TYPE_INT16}  // Custom param: Winch speed %
