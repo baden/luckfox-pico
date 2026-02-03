@@ -235,6 +235,10 @@ post_chk() {
 	# or
 	# tail -f /var/log/messages | awk '/drone_app/ {print $0; fflush()}'
 
+	# Disable fb for OLED on I2C3 if exists
+	echo 3-003c > /sys/bus/i2c/devices/3-003c/driver/unbind
+
+
 	# Check if drone is already running
 	pidof drone >/dev/null 2>&1
 	if [ $? -eq 0 ]; then
