@@ -131,6 +131,8 @@ static void play_buzzer_pattern(bool* states, int count, double duration_ms) {
 static void* crsf_thread_func(void* arg) {
     printf("CRSF thread started\n");
     
+    double last_packet_timestamp = 0;
+
     while (!g_control.should_exit) {
         if (!crsf_is_connected(&g_crsf)) {
             printf("CRSF disconnected, attempting to reconnect...\n");
@@ -149,55 +151,60 @@ static void* crsf_thread_func(void* arg) {
         // Get latest channels
         crsf_channels_t channels;
         if (crsf_get_channels(&g_crsf, &channels) == 0) {
-            pthread_mutex_lock(&g_control.mutex);
-            
-            // Channel 4 is ARM button (>0.5 = armed)
-            bool new_arm_state = channels.values[4] > 0.5f;
-            
-            if (new_arm_state) {
-                g_control.axis_0 = channels.values[0];
-                g_control.axis_1 = channels.values[1];
-            } else {
-                g_control.axis_0 = 0.0f;
-                g_control.axis_1 = 0.0f;
-            }
-            
-            // Handle ARM state changes
-            if (g_control.arm_state != new_arm_state) {
-                g_control.arm_state = new_arm_state;
+            // Only process if we have NEW data
+            if (channels.timestamp > last_packet_timestamp) {
+                last_packet_timestamp = channels.timestamp;
+                
+                pthread_mutex_lock(&g_control.mutex);
+                
+                // Channel 4 is ARM button (>0.5 = armed)
+                bool new_arm_state = channels.values[4] > 0.5f;
+                
                 if (new_arm_state) {
-                    g_timing.arm_start_time = get_time_seconds();
-                    play_buzzer_pattern((bool[]){true, false}, 2, 100);
+                    g_control.axis_0 = channels.values[0];
+                    g_control.axis_1 = channels.values[1];
                 } else {
-                    play_buzzer_pattern((bool[]){true, false, true, false}, 4, 100);
+                    g_control.axis_0 = 0.0f;
+                    g_control.axis_1 = 0.0f;
                 }
+                
+                // Handle ARM state changes
+                if (g_control.arm_state != new_arm_state) {
+                    g_control.arm_state = new_arm_state;
+                    if (new_arm_state) {
+                        g_timing.arm_start_time = get_time_seconds();
+                        play_buzzer_pattern((bool[]){true, false}, 2, 100);
+                    } else {
+                        play_buzzer_pattern((bool[]){true, false, true, false}, 4, 100);
+                    }
+                }
+                
+                // Update lebidka (channel 2)
+                if (channels.values[2] < -0.5f) {
+                    g_control.lebidka_state = LEBIDKA_STATE_UP;
+                } else if (channels.values[2] > 0.5f) {
+                    g_control.lebidka_state = LEBIDKA_STATE_DOWN;
+                } else {
+                    g_control.lebidka_state = LEBIDKA_STATE_NEUTRAL;
+                }
+                
+                // Update aktuator (channel 3)
+                if (channels.values[3] < -0.5f) {
+                    g_control.aktuator_state = AKTUATOR_STATE_FORWARD;
+                } else if (channels.values[3] > 0.5f) {
+                    g_control.aktuator_state = AKTUATOR_STATE_BACKWARD;
+                } else {
+                    g_control.aktuator_state = AKTUATOR_STATE_NEUTRAL;
+                }
+                
+                pthread_mutex_unlock(&g_control.mutex);
+                
+                // Update timing - ONLY when new packet arrived
+                g_timing.last_crsf_time = get_time_seconds();
             }
-            
-            // Update lebidka (channel 2)
-            if (channels.values[2] < -0.5f) {
-                g_control.lebidka_state = LEBIDKA_STATE_UP;
-            } else if (channels.values[2] > 0.5f) {
-                g_control.lebidka_state = LEBIDKA_STATE_DOWN;
-            } else {
-                g_control.lebidka_state = LEBIDKA_STATE_NEUTRAL;
-            }
-            
-            // Update aktuator (channel 3)
-            if (channels.values[3] < -0.5f) {
-                g_control.aktuator_state = AKTUATOR_STATE_FORWARD;
-            } else if (channels.values[3] > 0.5f) {
-                g_control.aktuator_state = AKTUATOR_STATE_BACKWARD;
-            } else {
-                g_control.aktuator_state = AKTUATOR_STATE_NEUTRAL;
-            }
-            
-            pthread_mutex_unlock(&g_control.mutex);
-            
-            // Update timing
-            g_timing.last_crsf_time = get_time_seconds();
         }
         
-        usleep(20000); // 20ms
+        usleep(5000); // 5ms (increased polling rate slightly)
     }
     
     printf("CRSF thread exiting\n");
@@ -255,12 +262,29 @@ static void* udp_thread_func(void* arg) {
             pthread_mutex_lock(&g_control.mutex);
             
             // Check if CRSF has priority (last CRSF data < 10 seconds ago)
-            bool crsf_has_priority = (get_time_seconds() - g_timing.last_crsf_time) < 10.0;
+            // But also check if CRSF is actually *fresh* (e.g. < 1.0s) to handle the deadzone
+            double time_since_crsf = get_time_seconds() - g_timing.last_crsf_time;
+            bool crsf_has_priority = time_since_crsf < 10.0;
+            bool crsf_is_fresh = time_since_crsf < 1.0;
             
             // printf("UDP: received=%d, cmd_arm=%d, cmd_disarm=%d, crsf_priority=%d\n", 
             //        result, input.cmd_arm, input.cmd_disarm, crsf_has_priority);
             
-            if (!crsf_has_priority) {
+            if (crsf_has_priority) {
+                // We are in the priority window.
+                if (!crsf_is_fresh) {
+                    // DEADZONE: RC was active recently, but signal is lost now.
+                    // We haven't switched to UDP yet (waiting for 10s timeout).
+                    // FAILSAFE: Force axes to neutral to prevent fly-away.
+                    if (g_control.arm_state) {
+                         g_control.axis_0 = 0.0f;
+                         g_control.axis_1 = 0.0f;
+                         // printf("UDP: RC Lost (Deadzone) - Centering controls\n");
+                    }
+                }
+                // Else: RC is driving, ignore UDP.
+            } else {
+                // UDP takes over
                 // Handle Mode Change Requests
                 if (input.cmd_set_mode) {
                     printf("UDP: Processing SET_MODE (Mode=%d, Custom=%d)\n", 
