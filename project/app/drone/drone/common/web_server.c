@@ -10,12 +10,17 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     if (ev == MG_EV_HTTP_MSG) {
         struct mg_http_message *hm = (struct mg_http_message *)ev_data;
         
-        // Serve files from the configured root
-        struct mg_http_serve_opts opts = {
-            .root_dir = server->www_root,
-            .extra_headers = "Access-Control-Allow-Origin: *\r\n"
-        };
-        mg_http_serve_dir(c, hm, &opts);
+        // Check for WebSocket upgrade request
+        if (mg_http_get_header(hm, "Upgrade") != NULL) {
+            mg_ws_upgrade(c, hm, NULL);
+        } else {
+            // Serve files from the configured root
+            struct mg_http_serve_opts opts = {
+                .root_dir = server->www_root,
+                .extra_headers = "Access-Control-Allow-Origin: *\r\n"
+            };
+            mg_http_serve_dir(c, hm, &opts);
+        }
         
     } else if (ev == MG_EV_WS_OPEN) {
         server->connected = true;
