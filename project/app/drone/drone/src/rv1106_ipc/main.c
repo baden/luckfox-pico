@@ -153,9 +153,22 @@ static void* oled_thread_func(void* arg) {
     printf("OLED thread started\n");
     usleep(1000000); // 1sec
     while (!g_control.should_exit) {
-        // Update OLED display every 200ms
-        oled_display();
-        usleep(200000); // 200ms
+        double now = get_time_seconds();
+
+        pthread_mutex_lock(&g_control.mutex);
+        oled_status_t status = {
+            .armed = g_control.arm_state,
+            .axis0 = g_control.axis_0,
+            .axis1 = g_control.axis_1,
+            .udp_connected = (now - g_timing.last_udp_time) < 10.0,
+            .web_connected = g_web.connected,
+            .crsf_connected = (now - g_timing.last_crsf_time) < 3.0
+        };
+        pthread_mutex_unlock(&g_control.mutex);
+
+        // Update OLED display every 100ms (10fps for smooth animation)
+        oled_display(&status);
+        usleep(100000); // 100ms
     }
     printf("OLED thread exiting\n");
     return NULL;

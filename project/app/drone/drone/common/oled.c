@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include "oled.h"
 // #include "ssd1306.h"
 // #include "ssd1306_fonts.h"
 // #include "nano_gfx.h"
@@ -9,7 +10,7 @@
 #define U8G2_USE_LINUX_FB 1
 
 // #include "linux-i2c.h"
-#include "u8g2.h"
+#include "u8g2/csrc/u8g2.h"
 
 #if defined(U8G2_USE_LINUX_I2C) && U8G2_USE_LINUX_I2C == 1
 #define SSD1306_ADDR 0x3C
@@ -119,20 +120,65 @@ int oled_init(void)
 }
 
 
-void oled_display(void)
+void oled_display(const oled_status_t* status)
 {
-    // For testing, display a counter
-    static int counter = 0;
-    char buf[32];
-    snprintf(buf, sizeof(buf), "Count: %d", counter++);
-
     u8g2_ClearBuffer(&u8g2);
-    u8g2_SetFont(&u8g2, u8g2_font_smart_patrol_nbp_tf);
-    u8g2_SetFontRefHeightText(&u8g2);
-    u8g2_SetFontPosTop(&u8g2);
-    u8g2_DrawStr(&u8g2, 0, 0, buf);
-    u8g2_SendBuffer(&u8g2);
-    // u8g2_UpdateDisplay(&u8g2);
+    
+    // --- 1. ARM State (Top Left) ---
+    u8g2_SetFont(&u8g2, u8g2_font_profont12_tf); // Small clear font
+    if (status->armed) {
+        u8g2_DrawStr(&u8g2, 0, 8, "ARM");
+    } else {
+        u8g2_DrawStr(&u8g2, 0, 8, "DIS");
+    }
 
+    // --- 2. Connection Status (Below ARM) ---
+    // M = MAVLink/UDP, W = Web, R = CRSF
+    int y_status = 20;
+    int x_status = 0;
+    
+    if (status->udp_connected) {
+        u8g2_DrawStr(&u8g2, x_status, y_status, "M");
+        x_status += 10;
+    }
+    if (status->web_connected) {
+        u8g2_DrawStr(&u8g2, x_status, y_status, "W");
+        x_status += 10;
+    }
+    if (status->crsf_connected) {
+        u8g2_DrawStr(&u8g2, x_status, y_status, "R");
+    }
+
+    // --- 3. Animation (Moving Dot) ---
+    static int anim_x = 0;
+    static int anim_dir = 1;
+    
+    // Animate in a small area below status, e.g., line 28-30
+    u8g2_DrawPixel(&u8g2, 10 + anim_x, 30);
+    
+    anim_x += anim_dir;
+    if (anim_x > 20) anim_dir = -1;
+    if (anim_x < 0) anim_dir = 1;
+
+    // --- 4. Stick Visualizer (Right Side) ---
+    // Circle d=32 -> r=16. Center around x=96 (128-32), y=16
+    int cx = 96;
+    int cy = 16;
+    int r = 15; // Slightly smaller to fit
+    
+    u8g2_DrawCircle(&u8g2, cx, cy, r, U8G2_DRAW_ALL);
+    u8g2_DrawLine(&u8g2, cx - r, cy, cx + r, cy); // Horizontal axis
+    u8g2_DrawLine(&u8g2, cx, cy - r, cx, cy + r); // Vertical axis
+    
+    // Stick Position dot
+    // Map -1.0..1.0 to -r..r
+    // axis0 is Roll (X), axis1 is Pitch (Y)
+    int dot_x = cx + (int)(status->axis0 * r);
+    int dot_y = cy - (int)(status->axis1 * r); // Invert Y because screen Y+ is down
+    
+    // Draw filled circle for dot (r=2)
+    u8g2_DrawDisc(&u8g2, dot_x, dot_y, 2, U8G2_DRAW_ALL);
+
+    u8g2_SendBuffer(&u8g2);
     flush_fb();
 }
