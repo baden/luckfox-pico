@@ -51,6 +51,7 @@ static pwm_control_t g_pwm = {0};
 static web_server_t g_web = {0};
 
 // Thread handles
+static pthread_t oled_thread;
 static pthread_t crsf_thread;
 static pthread_t udp_thread;
 static pthread_t web_thread;
@@ -145,6 +146,19 @@ static void play_buzzer_pattern(bool* states, int count, double duration_ms) {
         .duration_ms = duration_ms
     };
     gpio_buzzer_play_pattern(&g_gpio, &pattern);
+}
+
+// OLED reading thread
+static void* oled_thread_func(void* arg) {
+    printf("OLED thread started\n");
+    usleep(1000000); // 1sec
+    while (!g_control.should_exit) {
+        // Update OLED display every 200ms
+        oled_display();
+        usleep(200000); // 200ms
+    }
+    printf("OLED thread exiting\n");
+    return NULL;
 }
 
 // CRSF reading thread
@@ -593,8 +607,16 @@ int main(int argc, char *argv[])
     printf("Starting threads...\n");
 
     // Create threads
+    if (pthread_create(&oled_thread, NULL, oled_thread_func, NULL) != 0) {
+        fprintf(stderr, "Failed to create OLED thread\n");
+        cleanup_modules();
+        return 1;
+    }
+
     if (pthread_create(&crsf_thread, NULL, crsf_thread_func, NULL) != 0) {
         fprintf(stderr, "Failed to create CRSF thread\n");
+        g_control.should_exit = true;
+        pthread_join(oled_thread, NULL);
         cleanup_modules();
         return 1;
     }
@@ -602,6 +624,7 @@ int main(int argc, char *argv[])
     if (pthread_create(&udp_thread, NULL, udp_thread_func, NULL) != 0) {
         fprintf(stderr, "Failed to create UDP thread\n");
         g_control.should_exit = true;
+        pthread_join(oled_thread, NULL);
         pthread_join(crsf_thread, NULL);
         cleanup_modules();
         return 1;
@@ -610,6 +633,7 @@ int main(int argc, char *argv[])
     if (pthread_create(&web_thread, NULL, web_thread_func, NULL) != 0) {
         fprintf(stderr, "Failed to create Web thread\n");
         g_control.should_exit = true;
+        pthread_join(oled_thread, NULL);
         pthread_join(crsf_thread, NULL);
         pthread_join(udp_thread, NULL);
         cleanup_modules();
@@ -619,6 +643,7 @@ int main(int argc, char *argv[])
     if (pthread_create(&control_thread, NULL, control_thread_func, NULL) != 0) {
         fprintf(stderr, "Failed to create control thread\n");
         g_control.should_exit = true;
+        pthread_join(oled_thread, NULL);
         pthread_join(crsf_thread, NULL);
         pthread_join(udp_thread, NULL);
         pthread_join(web_thread, NULL);
@@ -629,6 +654,7 @@ int main(int argc, char *argv[])
     if (pthread_create(&watchdog_thread, NULL, watchdog_thread_func, NULL) != 0) {
         fprintf(stderr, "Failed to create watchdog thread\n");
         g_control.should_exit = true;
+        pthread_join(oled_thread, NULL);
         pthread_join(crsf_thread, NULL);
         pthread_join(udp_thread, NULL);
         pthread_join(web_thread, NULL);
@@ -678,6 +704,7 @@ int main(int argc, char *argv[])
     g_control.should_exit = true;
 
     // Wait for all threads to finish
+    pthread_join(oled_thread, NULL);
     pthread_join(crsf_thread, NULL);
     pthread_join(udp_thread, NULL);
     pthread_join(web_thread, NULL);
