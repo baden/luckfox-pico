@@ -37,11 +37,18 @@ int oled_init(void)
     u8g2_InitDisplay(&u8g2);
     u8g2_SetPowerSave(&u8g2, 0); // Wake up display
     u8g2_ClearBuffer(&u8g2);
-    u8g2_SetFont(&u8g2, u8g2_font_smart_patrol_nbp_tf);
+    u8g2_SetFont(&u8g2, u8g2_font_maniac_tf);
     u8g2_SetFontRefHeightText(&u8g2);
     u8g2_SetFontPosTop(&u8g2);
 
     u8g2_DrawStr(&u8g2, 0, 0, "Loading...");
+
+    // u8g2_SetFont(&u8g2, u8g2_font_sticker100complete_tr);
+    // u8g2_SetFontRefHeightText(&u8g2);
+    // u8g2_SetFontPosTop(&u8g2);
+    // u8g2_DrawStr(&u8g2, 0, 0, ".");
+
+
     u8g2_SendBuffer(&u8g2);
 
 

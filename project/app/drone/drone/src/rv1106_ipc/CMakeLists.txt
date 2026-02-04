@@ -10,15 +10,15 @@ set(COMMON_SOURCES
     ${PROJECT_SOURCE_DIR}/common/web_server.c
     ${PROJECT_SOURCE_DIR}/common/mongoose/mongoose.c
     ${PROJECT_SOURCE_DIR}/common/oled.c
-    ${PROJECT_SOURCE_DIR}/common/ssd1306/intf/ssd1306_interface.c
-    ${PROJECT_SOURCE_DIR}/common/ssd1306/intf/i2c/ssd1306_i2c.c
-    ${PROJECT_SOURCE_DIR}/common/ssd1306/intf/spi/ssd1306_spi.c
-    ${PROJECT_SOURCE_DIR}/common/ssd1306/ssd1306_hal/linux/platform.c
-    ${PROJECT_SOURCE_DIR}/common/ssd1306/lcd/oled_ssd1306.c
-    ${PROJECT_SOURCE_DIR}/common/ssd1306/lcd/lcd_common.c
-    ${PROJECT_SOURCE_DIR}/common/ssd1306/ssd1306_1bit.c
-    ${PROJECT_SOURCE_DIR}/common/ssd1306/ssd1306_generic.c
-    ${PROJECT_SOURCE_DIR}/common/ssd1306/ssd1306_fonts.c
+    # ${PROJECT_SOURCE_DIR}/common/ssd1306/intf/ssd1306_interface.c
+    # ${PROJECT_SOURCE_DIR}/common/ssd1306/intf/i2c/ssd1306_i2c.c
+    # ${PROJECT_SOURCE_DIR}/common/ssd1306/intf/spi/ssd1306_spi.c
+    # ${PROJECT_SOURCE_DIR}/common/ssd1306/ssd1306_hal/linux/platform.c
+    # ${PROJECT_SOURCE_DIR}/common/ssd1306/lcd/oled_ssd1306.c
+    # ${PROJECT_SOURCE_DIR}/common/ssd1306/lcd/lcd_common.c
+    # ${PROJECT_SOURCE_DIR}/common/ssd1306/ssd1306_1bit.c
+    # ${PROJECT_SOURCE_DIR}/common/ssd1306/ssd1306_generic.c
+    # ${PROJECT_SOURCE_DIR}/common/ssd1306/ssd1306_fonts.c
 
     ${PROJECT_SOURCE_DIR}/common/u8g2/sys/linux-fb/common/u8x8_d_framebuffer.c
 )
