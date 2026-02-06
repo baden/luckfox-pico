@@ -58,7 +58,8 @@ int oled_init(void)
     printf("OLED: Initializing SSD1306 display...\n");
 
     #if defined(U8G2_USE_LINUX_I2C) && U8G2_USE_LINUX_I2C == 1
-    u8g2_Setup_ssd1306_i2c_128x32_univision_1(&u8g2, U8G2_R0, u8x8_byte_linux_i2c, u8x8_linux_i2c_delay);
+    // u8g2_Setup_ssd1306_i2c_128x32_univision_2(&u8g2, U8G2_R0, u8x8_byte_linux_i2c, u8x8_linux_i2c_delay);
+    u8g2_Setup_ssd1306_i2c_128x32_univision_f(&u8g2, U8G2_R0, u8x8_byte_linux_i2c, u8x8_linux_i2c_delay);
     u8g2_SetI2CAddress(&u8g2, SSD1306_ADDR /*<< 1*/); // Shift address for 7-bit ?
     #endif
 
