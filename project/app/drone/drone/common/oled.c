@@ -1,13 +1,14 @@
 #include <stdio.h>
 #include "oled.h"
+#include "linux-i2c.h"
 // #include "ssd1306.h"
 // #include "ssd1306_fonts.h"
 // #include "nano_gfx.h"
 
 // #include "ssd1306_i2c.h"
 
-#define U8G2_USE_LINUX_I2C 0
-#define U8G2_USE_LINUX_FB 1
+#define U8G2_USE_LINUX_I2C 1
+#define U8G2_USE_LINUX_FB 0
 
 // #include "linux-i2c.h"
 #include "u8g2/csrc/u8g2.h"
@@ -123,7 +124,7 @@ int oled_init(void)
 void oled_display(const oled_status_t* status)
 {
     u8g2_ClearBuffer(&u8g2);
-    
+
     // --- 1. ARM State (Top Left) ---
     u8g2_SetFont(&u8g2, u8g2_font_profont12_tf); // Small clear font
     if (status->armed) {
@@ -136,7 +137,7 @@ void oled_display(const oled_status_t* status)
     // M = MAVLink/UDP, W = Web, R = CRSF
     int y_status = 20;
     int x_status = 0;
-    
+
     if (status->udp_connected) {
         u8g2_DrawStr(&u8g2, x_status, y_status, "M");
         x_status += 10;
@@ -152,10 +153,10 @@ void oled_display(const oled_status_t* status)
     // --- 3. Animation (Moving Dot) ---
     static int anim_x = 0;
     static int anim_dir = 1;
-    
+
     // Animate in a small area below status, e.g., line 28-30
     u8g2_DrawPixel(&u8g2, 10 + anim_x, 30);
-    
+
     anim_x += anim_dir;
     if (anim_x > 20) anim_dir = -1;
     if (anim_x < 0) anim_dir = 1;
@@ -165,17 +166,17 @@ void oled_display(const oled_status_t* status)
     int cx = 96;
     int cy = 16;
     int r = 15; // Slightly smaller to fit
-    
+
     u8g2_DrawCircle(&u8g2, cx, cy, r, U8G2_DRAW_ALL);
     u8g2_DrawLine(&u8g2, cx - r, cy, cx + r, cy); // Horizontal axis
     u8g2_DrawLine(&u8g2, cx, cy - r, cx, cy + r); // Vertical axis
-    
+
     // Stick Position dot
     // Map -1.0..1.0 to -r..r
     // axis0 is Roll (X), axis1 is Pitch (Y)
     int dot_x = cx + (int)(status->axis0 * r);
     int dot_y = cy - (int)(status->axis1 * r); // Invert Y because screen Y+ is down
-    
+
     // Draw filled circle for dot (r=2)
     u8g2_DrawDisc(&u8g2, dot_x, dot_y, 2, U8G2_DRAW_ALL);
 

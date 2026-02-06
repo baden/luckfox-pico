@@ -1,12 +1,28 @@
 #!/bin/sh
 
-WG_INTERFACE="wg0"
-WG_PRIVATE_KEY="/etc/wireguard/privatekey"
-WG_PUBLIC_KEY="/etc/wireguard/publickey"
-WG_SERVER_IP="SERVER_IP_HERE"
-WG_SERVER_PUBLIC_KEY="SERVER_PUBLIC_KEY_HERE"
-WG_ADDRESS="10.8.0.2/24"
-WG_PEER_ALLOWED_IPS="10.8.0.0/24"
+export WG_INTERFACE="wg0"
+export WG_PRIVATE_KEY="/etc/wireguard/privatekey"
+export WG_PUBLIC_KEY="/etc/wireguard/publickey"
+
+if [ -f /userdata/drone-env.sh ]; then
+	echo "Loading environment variables from /userdata/drone-env.sh"
+	. /userdata/drone-env.sh
+else
+		cat >/userdata/drone-env.sh <<EOF
+export WG_SERVER_IP="SERVER_IP_HERE"
+export WG_SERVER_PUBLIC_KEY="SERVER_PUBLIC_KEY_HERE"
+export WG_ADDRESS="10.8.0.2"
+export WG_PEER_ALLOWED_IPS="10.8.0.0"
+export WG_SUBNET="10.0.1.0"
+export WG_UPLINK_IP="192.168.1.201"
+export WG_UPLINK_NET="192.168.1.0"
+export WG_UPLINK_GATE="192.168.1.1"
+export WG_MTU="1200"
+EOF
+	echo "Error: /userdata/drone-env.sh not found. Init default settings. Please edit the file to configure VPN and drone settings."
+	exit 1
+fi
+
 
 rcS() {
 	for i in /oem/usr/etc/init.d/S??*; do
@@ -62,8 +78,14 @@ network_init() {
 	else
 		echo $ethaddr1 >/data/ethaddr.txt
 	fi
-	ifconfig eth0 up && udhcpc -i eth0 >/dev/null 2>&1
 
+	#ifconfig eth0 up && udhcpc -i eth0 >/dev/null 2>&1
+
+	ifconfig eth0 $WG_UPLINK_IP netmask 255.255.255.0
+	route add default gw $WG_UPLINK_GATE
+
+	ifconfig eth0:0 192.168.3.222 netmask 255.255.255.0
+	route add default gw 192.168.3.1
 
 	# Check if WireGuard interface already exists
 	if interface_exists; then
@@ -84,11 +106,14 @@ network_init() {
 		echo "Generated WireGuard keys. Please configure the VPN settings on server."
 		#echo "Drone public key:"
 		#cat $WG_PUBLIC_KEY
-		echo "Go to server and add a new peer with the following configuration (/etc/wireguard/wg0.conf):"
+		echo "Go to server and add a new peer with the following configuration."
+		echo " vi /etc/wireguard/wg0.conf"
+		echo "Edit/Add the following peer configuration:"
+		echo ""
 		echo "[Peer]"
 		echo "# Drone (Luckfox)"
 		echo "PublicKey = $(cat $WG_PUBLIC_KEY)"
-		echo "AllowedIPs = 10.8.0.2/32, 10.0.0.0/24"
+		echo "AllowedIPs = $(cat $WG_ADDRESS)/32, $(cat $WG_SUBNET)/24"
 		echo ""
 		echo "Execute on server and copy IP and key from output:"
 		echo "  cat /etc/wireguard/publickey"
@@ -96,7 +121,7 @@ network_init() {
 		echo "  systemctl restart wg-quick@wg0.service"
 		echo ""
 		echo "Then update the WG_SERVER_IP and WG_SERVER_PUBLIC_KEY variables in this script."
-		echo "  vi /oem/usr/bin/DroneLunch.sh"
+		echo "  vi /userdata/drone-env.sh"
 		echo "Then restart the drone or execute the script again."
 		echo "  /etc/init.d/S21appinit start"
 		echo "======================================================================"
@@ -120,25 +145,25 @@ network_init() {
 
 	# Set IP address
 	echo "Setting IP address $WG_ADDRESS..."
-	ip address add dev $WG_INTERFACE $WG_ADDRESS
+	ip address add dev $WG_INTERFACE $WG_ADDRESS/24
 
 	# Configure WireGuard with private key and peer
-	wg set $WG_INTERFACE listen-port 51820 private-key $WG_PRIVATE_KEY peer $WG_SERVER_PUBLIC_KEY allowed-ips $WG_PEER_ALLOWED_IPS endpoint $WG_SERVER_IP:51820 persistent-keepalive 25
-	ip link set dev $WG_INTERFACE mtu 1200
+	wg set $WG_INTERFACE listen-port 51820 private-key $WG_PRIVATE_KEY peer $WG_SERVER_PUBLIC_KEY allowed-ips $WG_PEER_ALLOWED_IPS/24 endpoint $WG_SERVER_IP:51820 persistent-keepalive 25
+	ip link set dev $WG_INTERFACE mtu $WG_MTU
 
 	# Bring interface up
 	echo "Bringing up interface $WG_INTERFACE..."
 	ip link set up dev $WG_INTERFACE
 
-	# Add 10.0.0.0/24 to eth0 for local network access
-	if ! ip addr show eth0 | grep -q "10.0.0.1"; then
+	# Add WG$WG_SUBNET/24 to eth0 for local network access
+	if ! ip addr show eth0 | grep -q "$WG_SUBNET"; then
 		echo "Adding route to local network"
-    	ip addr add 10.0.0.1/24 dev eth0
+    	ip addr add $WG_SUBNET/24 dev eth0
 	fi
 
 	# Шоб мати доступ до камер з заводськими налаштуваннями (192.168.1.108/32)
 	# ip route add 192.168.1.108 dev eth0
-	ip route replace 192.168.1.108 dev eth0
+	#ip route replace 192.168.1.108 dev eth0
 
 	# Enable IP forwarding
 	echo "Enabling IP forwarding..."
@@ -161,8 +186,8 @@ network_init() {
 
 	# 3. NAT для виходу в інтернет через VPN (якщо потрібно для самого Luckfox)
 	iptables -t nat -A POSTROUTING -o $WG_INTERFACE -j MASQUERADE
-	iptables -t nat -A POSTROUTING -o eth0 -d 192.168.1.0/24 -j MASQUERADE
-	iptables -t nat -A POSTROUTING -o eth0 -d 10.0.0.0/24 -j MASQUERADE
+	iptables -t nat -A POSTROUTING -o eth0 -d $WG_UPLINK_NET/24 -j MASQUERADE
+	iptables -t nat -A POSTROUTING -o eth0 -d $WG_SUBNET/24 -j MASQUERADE
 
 	# 4. Forwarding: Дозволяємо клієнтам з VPN бачити камери
 	iptables -A FORWARD -i $WG_INTERFACE -o eth0 -j ACCEPT
@@ -236,7 +261,7 @@ post_chk() {
 	# tail -f /var/log/messages | awk '/drone_app/ {print $0; fflush()}'
 
 	# Disable fb for OLED on I2C3 if exists
-	echo 3-003c > /sys/bus/i2c/devices/3-003c/driver/unbind
+	# echo 3-003c > /sys/bus/i2c/devices/3-003c/driver/unbind
 
 
 	# Check if drone is already running

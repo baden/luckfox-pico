@@ -1,3 +1,5 @@
 #rkipc
 out
 build
+drone-env.sh
+drone-env*.sh

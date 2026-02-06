@@ -43,3 +43,4 @@ if(COMPILE_FOR_RV1106_IPC)
   add_subdirectory(src/rv1106_ipc)
 endif()
 
+install(FILES ${PROJECT_SOURCE_DIR}/overlay/go2rtc.yaml DESTINATION share)

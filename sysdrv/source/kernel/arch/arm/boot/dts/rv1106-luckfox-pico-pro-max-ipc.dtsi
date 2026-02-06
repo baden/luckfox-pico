@@ -55,21 +55,21 @@
 			gpios = <&gpio3 RK_PC6 GPIO_ACTIVE_HIGH>;
 			linux,default-trigger = "activity";
 			default-state = "on";
-		};	
+		};
 	};
 
 	// DHT11
-	dht11_sensor {
-		compatible = "dht11";
-		pinctrl-names = "default";
-		pinctrl-0 = <&gpio1_pc7>;
+	//dht11_sensor {
+	//	compatible = "dht11";
+	//	pinctrl-names = "default";
+	//	pinctrl-0 = <&gpio1_pc7>;
 
-		dht11@1 {
-			gpios = <&gpio1 RK_PC7 GPIO_ACTIVE_HIGH>;
-			label = "dht11";
-			linux,default-trigger = "humidity";
-		};
-	};
+	//	dht11@1 {
+	//		gpios = <&gpio1 RK_PC7 GPIO_ACTIVE_HIGH>;
+	//		label = "dht11";
+	//		linux,default-trigger = "humidity";
+	//	};
+	//};
 
 };
 

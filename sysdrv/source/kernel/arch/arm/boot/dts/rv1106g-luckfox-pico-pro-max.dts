@@ -109,34 +109,35 @@
 /* I2C for OLED SSD1306. TODO: Test FBDEV over drivers/video/fbdev/ssd1307fb */
 &i2c3 {
 	status = "okay";
-	clock-frequency = <400000>;
+	clock-frequency = <100000>;
 	pinctrl-0 = <&i2c3m0_xfer>; /* GPIO2_A6 (pin29), GPIO2_A7 (pin34) */
 	pinctrl-names = "default";
 
-	oled: ssd1306@3c {
-		compatible = "solomon,ssd1306fb-i2c";
-		reg = <0x3c>;
-		solomon,width = <128>;
-		solomon,height = <32>; // Or 64 for other screen
-		solomon,page-offset = <0>;
+	//oled: ssd1306@3c {
+	//	compatible = "solomon,ssd1306fb-i2c";
+	//	status = "disabled";
+	//	reg = <0x3c>;
+	//	solomon,width = <128>;
+	//	solomon,height = <32>; // Or 64 for other screen
+	//	solomon,page-offset = <0>;
 
-		/* 0x02 (Sequential) */
-		//solomon,com-seq;
-		//solomon,com-invdir;
-		//solomon,com-lrremap;
+	//	/* 0x02 (Sequential) */
+	//	//solomon,com-seq;
+	//	//solomon,com-invdir;
+	//	//solomon,com-lrremap;
 
-		/* Charge Pump */
-		//solomon,prechargep1 = <2>;
-		//solomon,prechargep2 = <2>;
+	//	/* Charge Pump */
+	//	//solomon,prechargep1 = <2>;
+	//	//solomon,prechargep2 = <2>;
 
-		/* Це саме ті команди, що дали результат у Python */
-		solomon,com-seq;             /* Ключ до Sequential Mode */
-		solomon,com-invdir;
-		/delete-property/ solomon,com-lrremap;
+	//	/* Це саме ті команди, що дали результат у Python */
+	//	solomon,com-seq;             /* Ключ до Sequential Mode */
+	//	solomon,com-invdir;
+	//	/delete-property/ solomon,com-lrremap;
 
-		/* Допомагає драйверу правильно розрахувати Multiplex Ratio */
-		solomon,mux-ratio = <31>;
-	};
+	//	/* Допомагає драйверу правильно розрахувати Multiplex Ratio */
+	//	solomon,mux-ratio = <31>;
+	//};
 };
 
 /* I2C1_M1 */

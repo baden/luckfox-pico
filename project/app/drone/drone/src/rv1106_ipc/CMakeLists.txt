@@ -10,6 +10,7 @@ set(COMMON_SOURCES
     ${PROJECT_SOURCE_DIR}/common/web_server.c
     ${PROJECT_SOURCE_DIR}/common/mongoose/mongoose.c
     ${PROJECT_SOURCE_DIR}/common/oled.c
+    ${PROJECT_SOURCE_DIR}/common/linux-i2c.c
     # ${PROJECT_SOURCE_DIR}/common/ssd1306/intf/ssd1306_interface.c
     # ${PROJECT_SOURCE_DIR}/common/ssd1306/intf/i2c/ssd1306_i2c.c
     # ${PROJECT_SOURCE_DIR}/common/ssd1306/intf/spi/ssd1306_spi.c
@@ -63,10 +64,11 @@ target_link_libraries(${PROJECT_NAME}
     pthread
     m  # Math library for floating point operations
     rt # Real-time library for clock functions
+    #i2cdev # I2C device library for Linux
 )
 
 # Install the executable
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)
 install(PROGRAMS DroneLunch.sh DESTINATION bin)
 install(PROGRAMS DroneLunch-stop.sh DESTINATION bin)
-install(FILES ${PROJECT_SOURCE_DIR}/common/go2rtc.yaml DESTINATION share)
+# install(FILES ${PROJECT_SOURCE_DIR}/common/go2rtc.yaml DESTINATION share)
