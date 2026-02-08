@@ -15,6 +15,7 @@
 #include "../../common/drone_types.h"
 #include "../../common/web_server.h"
 #include "../../common/oled.h"
+#include "../../common/network_monitor.h"
 
 // Global control state
 typedef struct {
@@ -114,6 +115,16 @@ static int init_modules(const char* udp_host, int udp_port) {
     // Initialize mutex
     pthread_mutex_init(&g_control.mutex, NULL);
 
+    // Initialize Network Monitor
+    network_config_t net_config = {0};
+    // Need to pass these from main args, but here we just copy what we have or defaults if not set in main (but main calls this).
+    // Actually init_modules signature is fixed. I should probably init network monitor in main or pass config.
+    // Let's modify main to handle the config struct.
+
+    // For now, I'll modify init_modules to take the config if I can, OR just init it in main.
+    // Let's init it in main() before creating threads, to keep init_modules clean or add it there.
+    // init_modules is convenient. Let's stick to main() for network monitor since it has specific args.
+
     // Initialize OLED
     if (oled_init() != 0) {
         fprintf(stderr, "Failed to initialize OLED display\n");
@@ -155,6 +166,9 @@ static void* oled_thread_func(void* arg) {
     while (!g_control.should_exit) {
         double now = get_time_seconds();
 
+        network_state_t net_state;
+        network_monitor_get_state(&net_state);
+
         pthread_mutex_lock(&g_control.mutex);
         oled_status_t status = {
             .armed = g_control.arm_state,
@@ -162,7 +176,15 @@ static void* oled_thread_func(void* arg) {
             .axis1 = g_control.axis_1,
             .udp_connected = (now - g_timing.last_udp_time) < 10.0,
             .web_connected = g_web.connected,
-            .crsf_connected = (now - g_timing.last_crsf_time) < 3.0
+            .crsf_connected = (now - g_timing.last_crsf_time) < 3.0,
+
+            // Network mapping
+            .eth_status = net_state.eth_status,
+            .wg_status = net_state.wg_status,
+            .op_connected = net_state.operator_ping,
+            .dev1_ping = net_state.dev1_ping,
+            .dev2_ping = net_state.dev2_ping,
+            .dev3_ping = net_state.dev3_ping
         };
         pthread_mutex_unlock(&g_control.mutex);
 
@@ -592,9 +614,19 @@ int main(int argc, char *argv[])
     char udp_host[32] = UDP_SERVER_HOST; // Default from header
     int udp_port = UDP_SERVER_PORT;      // Default from header
 
+    // Network Config Defaults
+    network_config_t net_config;
+    strcpy(net_config.eth_gateway, "192.168.2.1");
+    strcpy(net_config.wg_gateway, "10.8.0.1");
+    // strcpy(net_config.operator_ip, "10.8.7.101");
+    strcpy(net_config.operator_ip, "10.8.0.3");
+    strcpy(net_config.dev1_ip, "10.0.7.101");
+    strcpy(net_config.dev2_ip, "10.0.7.102");
+    strcpy(net_config.dev3_ip, "10.0.7.103");
+
     // Parse arguments
     int opt;
-    while ((opt = getopt(argc, argv, "s:p:")) != -1) {
+    while ((opt = getopt(argc, argv, "s:p:g:w:o:")) != -1) {
         switch (opt) {
             case 's':
                 strncpy(udp_host, optarg, sizeof(udp_host) - 1);
@@ -603,18 +635,34 @@ int main(int argc, char *argv[])
             case 'p':
                 udp_port = atoi(optarg);
                 break;
+            case 'g': // Gateway for Eth
+                strncpy(net_config.eth_gateway, optarg, sizeof(net_config.eth_gateway) - 1);
+                break;
+            case 'w': // Gateway for WG
+                strncpy(net_config.wg_gateway, optarg, sizeof(net_config.wg_gateway) - 1);
+                break;
+            case 'o': // Operator IP
+                strncpy(net_config.operator_ip, optarg, sizeof(net_config.operator_ip) - 1);
+                break;
             default:
-                fprintf(stderr, "Usage: %s [-s server_ip] [-p server_port]\n", argv[0]);
+                fprintf(stderr, "Usage: %s [-s server_ip] [-p server_port] [-g eth_gw] [-w wg_gw] [-o op_ip]\n", argv[0]);
                 return 1;
         }
     }
 
     printf("Starting drone C application (MAVLink + Web enabled)...\n");
     printf("UDP Server: %s:%d\n", udp_host, udp_port);
+    printf("Net Monitor: EthGW=%s, WgGW=%s, Op=%s\n",
+           net_config.eth_gateway, net_config.wg_gateway, net_config.operator_ip);
 
     if (init_modules(udp_host, udp_port) != 0) {
         fprintf(stderr, "Failed to initialize modules\n");
         return 1;
+    }
+
+    if (network_monitor_init(&net_config) != 0) {
+        fprintf(stderr, "Failed to initialize Network Monitor\n");
+        // We can continue without it, but it's better to warn
     }
 
     printf("Starting threads...\n");
@@ -726,6 +774,7 @@ int main(int argc, char *argv[])
 
     // Cleanup
     cleanup_modules();
+    network_monitor_cleanup();
 
     printf("Shutdown complete\n");
     return 0;

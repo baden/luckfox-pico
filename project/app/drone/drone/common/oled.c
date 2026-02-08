@@ -127,31 +127,89 @@ void oled_display(const oled_status_t* status)
     u8g2_ClearBuffer(&u8g2);
 
     // --- 1. ARM State (Top Left) ---
-    u8g2_SetFont(&u8g2, u8g2_font_profont12_tf); // Small clear font
+    u8g2_SetFont(&u8g2, u8g2_font_profont17_tf); // Small clear font
     if (status->armed) {
-        u8g2_DrawStr(&u8g2, 0, 8, "ARM");
+        u8g2_DrawStr(&u8g2, 0, 0, "ARM");
     } else {
-        u8g2_DrawStr(&u8g2, 0, 8, "DIS");
+        u8g2_DrawStr(&u8g2, 0, 0, "DIS");
     }
 
     // --- 2. Connection Status (Below ARM) ---
     // M = MAVLink/UDP, W = Web, R = CRSF
-    int y_status = 20;
+    int y_status = 16;
     int x_status = 0;
+    int spacing = 10;
 
     if (status->udp_connected) {
         u8g2_DrawStr(&u8g2, x_status, y_status, "M");
-        x_status += 10;
+        x_status += spacing;
     }
     if (status->web_connected) {
         u8g2_DrawStr(&u8g2, x_status, y_status, "W");
-        x_status += 10;
+        x_status += spacing;
     }
     if (status->crsf_connected) {
         u8g2_DrawStr(&u8g2, x_status, y_status, "R");
     }
 
-    // --- 3. Animation (Moving Dot) ---
+    // --- 3. Network Status (Bottom Line) ---
+    // E=Eth, G=Wireguard (W used above), O=Op, 123=Devs
+    // Logic:
+    // - No Icon: Down
+    // - Char: Up (Layer 2)
+    // - Boxed Char: Ping OK (Layer 3)
+
+    int y_net = 16; // Bottom aligned
+    int x_net = 32;
+
+    // ETH0
+    if (status->eth_status > 0) {
+        if (status->eth_status == 2) { // Ping OK
+            // u8g2_DrawBox(&u8g2, x_net, y_net-9, 7, 10);
+            // u8g2_SetDrawColor(&u8g2, 0); // Invert text
+            u8g2_DrawStr(&u8g2, x_net+1, y_net, "E");
+            // u8g2_SetDrawColor(&u8g2, 1); // Restore
+        // } else {
+        //     u8g2_DrawStr(&u8g2, x_net+1, y_net, "E");
+        }
+        x_net += 8;
+    }
+
+    // WG0 (Use 'V' for VPN to distinguish from Web 'W'?) Or 'G'? Let's use 'G' for Guard
+    if (status->wg_status > 0) {
+        if (status->wg_status == 2) {
+            // u8g2_DrawBox(&u8g2, x_net, y_net-9, 7, 10);
+            // u8g2_SetDrawColor(&u8g2, 0);
+            u8g2_DrawStr(&u8g2, x_net+1, y_net, "G");
+            // u8g2_SetDrawColor(&u8g2, 1);
+        // } else {
+        //     u8g2_DrawStr(&u8g2, x_net+1, y_net, "G");
+        }
+        x_net += 8;
+    }
+
+    // Operator
+    if (status->op_connected) {
+        u8g2_DrawStr(&u8g2, x_net, y_net, "O");
+        x_net += 8;
+    }
+
+    // Devices 1, 2, 3
+    if (status->dev1_ping) {
+        u8g2_DrawStr(&u8g2, x_net, y_net, "1");
+        x_net += 6;
+    }
+    if (status->dev2_ping) {
+        u8g2_DrawStr(&u8g2, x_net, y_net, "2");
+        x_net += 6;
+    }
+    if (status->dev3_ping) {
+        u8g2_DrawStr(&u8g2, x_net, y_net, "3");
+        x_net += 6;
+    }
+
+
+    // --- 4. Animation (Moving Dot) ---
     static int anim_x = 0;
     static int anim_dir = 1;
 
