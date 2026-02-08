@@ -48,6 +48,9 @@ static bool ping_host(const char *ip_addr, int timeout_ms) {
     char buf[1024]; // Buffer for IP header + ICMP header + payload
     struct timeval start_tv, current_tv;
     fd_set rset;
+    
+    // Global sequence number to distinguish between rapid ping calls
+    static uint16_t global_seq = 0;
 
     // Validate IP
     if (!ip_addr || strlen(ip_addr) == 0) return false;
@@ -70,7 +73,8 @@ static bool ping_host(const char *ip_addr, int timeout_ms) {
     }
 
     int my_pid = getpid() & 0xFFFF;
-    int my_seq = 1;
+    // Increment sequence number for each call
+    int my_seq = ++global_seq;
 
     // Prepare ICMP packet
     memset(&icmp_hdr, 0, sizeof(icmp_hdr));
@@ -88,15 +92,15 @@ static bool ping_host(const char *ip_addr, int timeout_ms) {
 
     // Get start time
     gettimeofday(&start_tv, NULL);
-
+    
     bool success = false;
-
+    
     while (1) {
         // Calculate remaining time
         gettimeofday(&current_tv, NULL);
-        long elapsed_ms = (current_tv.tv_sec - start_tv.tv_sec) * 1000 +
+        long elapsed_ms = (current_tv.tv_sec - start_tv.tv_sec) * 1000 + 
                           (current_tv.tv_usec - start_tv.tv_usec) / 1000;
-
+        
         long remaining_ms = timeout_ms - elapsed_ms;
         if (remaining_ms <= 0) break;
 
@@ -112,21 +116,21 @@ static bool ping_host(const char *ip_addr, int timeout_ms) {
         if (ret > 0) {
             struct sockaddr_in r_addr;
             socklen_t addr_len = sizeof(r_addr);
-
+            
             // Receive packet
             ssize_t len = recvfrom(sockfd, buf, sizeof(buf), 0, (struct sockaddr *)&r_addr, &addr_len);
-
+            
             if (len > 0) {
                 // Parse IP Header to find ICMP Header
                 struct ip *ip = (struct ip *)buf;
                 int ip_hdr_len = ip->ip_hl * 4;
-
+                
                 if (len >= ip_hdr_len + (ssize_t)sizeof(struct icmp)) {
                     struct icmp *icmp = (struct icmp *)(buf + ip_hdr_len);
-
+                    
                     // Check if it is an Echo Reply AND matches our ID
                     if (icmp->icmp_type == ICMP_ECHOREPLY && icmp->icmp_id == my_pid) {
-                        // Check if it matches our sequence (optional but good practice)
+                        // Check if it matches our sequence (CRITICAL for avoiding late packets from previous pings)
                         if (icmp->icmp_seq == my_seq) {
                             success = true;
                             break; // Found our packet!
