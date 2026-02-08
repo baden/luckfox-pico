@@ -45,18 +45,16 @@ static bool ping_host(const char *ip_addr, int timeout_ms) {
     int sockfd;
     struct sockaddr_in addr;
     struct icmp icmp_hdr;
-    char buf[64]; // Small buffer needed
-    struct timeval tv;
+    char buf[1024]; // Buffer for IP header + ICMP header + payload
+    struct timeval start_tv, current_tv;
     fd_set rset;
 
     // Validate IP
     if (!ip_addr || strlen(ip_addr) == 0) return false;
 
     // Create raw socket
-    // Note: Requires root privileges (usually true for flight controller)
     sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
     if (sockfd < 0) {
-        // Socket creation failed (network stack not ready?)
         return false;
     }
 
@@ -71,12 +69,15 @@ static bool ping_host(const char *ip_addr, int timeout_ms) {
         return false;
     }
 
+    int my_pid = getpid() & 0xFFFF;
+    int my_seq = 1;
+
     // Prepare ICMP packet
     memset(&icmp_hdr, 0, sizeof(icmp_hdr));
     icmp_hdr.icmp_type = ICMP_ECHO;
     icmp_hdr.icmp_code = 0;
-    icmp_hdr.icmp_id = getpid() & 0xFFFF;
-    icmp_hdr.icmp_seq = 1;
+    icmp_hdr.icmp_id = my_pid;
+    icmp_hdr.icmp_seq = my_seq;
     icmp_hdr.icmp_cksum = checksum(&icmp_hdr, sizeof(icmp_hdr));
 
     // Send packet
@@ -85,22 +86,58 @@ static bool ping_host(const char *ip_addr, int timeout_ms) {
         return false;
     }
 
-    // Wait for reply
-    tv.tv_sec = timeout_ms / 1000;
-    tv.tv_usec = (timeout_ms % 1000) * 1000;
+    // Get start time
+    gettimeofday(&start_tv, NULL);
 
-    FD_ZERO(&rset);
-    FD_SET(sockfd, &rset);
-
-    int ret = select(sockfd + 1, &rset, NULL, NULL, &tv);
     bool success = false;
 
-    if (ret > 0) {
-        struct sockaddr_in r_addr;
-        socklen_t addr_len = sizeof(r_addr);
-        // We might receive other ICMP packets, strictly we should check ID, but for status monitoring this is usually enough
-        if (recvfrom(sockfd, buf, sizeof(buf), 0, (struct sockaddr *)&r_addr, &addr_len) > 0) {
-            success = true;
+    while (1) {
+        // Calculate remaining time
+        gettimeofday(&current_tv, NULL);
+        long elapsed_ms = (current_tv.tv_sec - start_tv.tv_sec) * 1000 +
+                          (current_tv.tv_usec - start_tv.tv_usec) / 1000;
+
+        long remaining_ms = timeout_ms - elapsed_ms;
+        if (remaining_ms <= 0) break;
+
+        struct timeval select_tv;
+        select_tv.tv_sec = remaining_ms / 1000;
+        select_tv.tv_usec = (remaining_ms % 1000) * 1000;
+
+        FD_ZERO(&rset);
+        FD_SET(sockfd, &rset);
+
+        int ret = select(sockfd + 1, &rset, NULL, NULL, &select_tv);
+
+        if (ret > 0) {
+            struct sockaddr_in r_addr;
+            socklen_t addr_len = sizeof(r_addr);
+
+            // Receive packet
+            ssize_t len = recvfrom(sockfd, buf, sizeof(buf), 0, (struct sockaddr *)&r_addr, &addr_len);
+
+            if (len > 0) {
+                // Parse IP Header to find ICMP Header
+                struct ip *ip = (struct ip *)buf;
+                int ip_hdr_len = ip->ip_hl * 4;
+
+                if (len >= ip_hdr_len + (ssize_t)sizeof(struct icmp)) {
+                    struct icmp *icmp = (struct icmp *)(buf + ip_hdr_len);
+
+                    // Check if it is an Echo Reply AND matches our ID
+                    if (icmp->icmp_type == ICMP_ECHOREPLY && icmp->icmp_id == my_pid) {
+                        // Check if it matches our sequence (optional but good practice)
+                        if (icmp->icmp_seq == my_seq) {
+                            success = true;
+                            break; // Found our packet!
+                        }
+                    }
+                }
+                // If packet didn't match, loop again and wait for next packet until timeout
+            }
+        } else {
+            // Timeout or error in select
+            break;
         }
     }
 
@@ -168,10 +205,10 @@ static void* network_monitor_thread_func(void* arg) {
         if (eth_phys_up) {
             bool ping_eth = ping_host(g_config.eth_gateway, 200); // 200ms timeout
             local_state.eth_status = ping_eth ? 2 : 1;
-            printf("Eth0: Link UP, Ping %s\n", ping_eth ? "OK" : "FAIL");
+            // printf("Eth0: Link UP, Ping %s\n", ping_eth ? "OK" : "FAIL");
         } else {
             local_state.eth_status = 0;
-            printf("Eth0: Link DOWN\n");
+            // printf("Eth0: Link DOWN\n");
         }
 
         // 2. Check wg0
@@ -179,10 +216,10 @@ static void* network_monitor_thread_func(void* arg) {
         if (wg_phys_up) {
             bool ping_wg = ping_host(g_config.wg_gateway, 500); // 500ms timeout (VPN might be slower to respond)
             local_state.wg_status = ping_wg ? 2 : 1;
-            printf("WG0: Link UP, Ping %s\n", ping_wg ? "OK" : "FAIL");
+            // printf("WG0: Link UP, Ping %s\n", ping_wg ? "OK" : "FAIL");
         } else {
             local_state.wg_status = 0;
-            printf("WG0: Link DOWN\n");
+            // printf("WG0: Link DOWN\n");
         }
 
         // 3. Check Operator (Only if eth+wg valid, as per requirements)
@@ -202,10 +239,10 @@ static void* network_monitor_thread_func(void* arg) {
                  local_state.dev1_ping = ping_host(g_config.dev1_ip, 100);
                  local_state.dev2_ping = ping_host(g_config.dev2_ip, 100);
                  local_state.dev3_ping = ping_host(g_config.dev3_ip, 100);
-                 printf("LAN Devices: Dev1 %s, Dev2 %s, Dev3 %s\n",
-                        local_state.dev1_ping ? "OK" : "FAIL",
-                        local_state.dev2_ping ? "OK" : "FAIL",
-                        local_state.dev3_ping ? "OK" : "FAIL");
+                //  printf("LAN Devices: Dev1 %s, Dev2 %s, Dev3 %s\n",
+                //         local_state.dev1_ping ? "OK" : "FAIL",
+                //         local_state.dev2_ping ? "OK" : "FAIL",
+                //         local_state.dev3_ping ? "OK" : "FAIL");
              }
         }
 
