@@ -201,6 +201,7 @@ static void* crsf_thread_func(void* arg) {
     printf("CRSF thread started\n");
 
     double last_packet_timestamp = 0;
+    double last_crsf_telem = 0;
 
     while (!g_control.should_exit) {
         if (!crsf_is_connected(&g_crsf)) {
@@ -209,6 +210,33 @@ static void* crsf_thread_func(void* arg) {
                 sleep(2);
                 continue;
             }
+        }
+
+        // Send Telemetry (1Hz)
+        double now = get_time_seconds();
+        if (now - last_crsf_telem >= 1.0) {
+            last_crsf_telem = now;
+            
+            network_state_t net_state;
+            network_monitor_get_state(&net_state);
+            
+            pthread_mutex_lock(&g_control.mutex);
+            bool udp_conn = (now - g_timing.last_udp_time) < 5.0; // 5s timeout
+            bool web_conn = g_web.connected;
+            pthread_mutex_unlock(&g_control.mutex);
+            
+            char telem_str[32];
+            // E:Eth, W:Wg, U:Udp, B:Browser(Web), ms:Ping
+            // Eth: >=1 means Link Up. Wg: ==2 means Ping OK.
+            snprintf(telem_str, sizeof(telem_str), "E%d W%d U%d B%d %dms",
+                (net_state.eth_status >= 1),
+                (net_state.wg_status == 2),
+                udp_conn,
+                web_conn,
+                net_state.operator_latency_ms
+            );
+            
+            crsf_send_telemetry_flight_mode(&g_crsf, telem_str);
         }
 
         if (crsf_process(&g_crsf) != 0) {

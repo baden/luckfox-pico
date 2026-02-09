@@ -24,6 +24,7 @@ typedef struct {
     int wg_status;
     
     bool operator_ping; // Чи пінгується оператор
+    int operator_latency_ms; // Ping latency in ms (-1 if fail)
     
     bool dev1_ping;     // Чи пінгуються пристрої
     bool dev2_ping;

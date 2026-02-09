@@ -275,6 +275,49 @@ int crsf_process(crsf_t* crsf) {
     return 0;
 }
 
+static int crsf_write_packet(crsf_t* crsf, uint8_t type, const uint8_t* payload, uint8_t payload_len) {
+    if (!crsf || crsf->fd < 0) return -1;
+
+    // Packet structure:
+    // [Sync] [Length] [Type] [Payload...] [CRC]
+    // Length = Size(Type) + Size(Payload) + Size(CRC) = 1 + payload_len + 1
+    
+    uint8_t buffer[64];
+    uint8_t length = 1 + payload_len + 1;
+    
+    if (length > 62) return -1; // Too large
+    
+    buffer[0] = CRSF_SYNC_BYTE;
+    buffer[1] = length;
+    buffer[2] = type;
+    
+    if (payload_len > 0) {
+        memcpy(&buffer[3], payload, payload_len);
+    }
+    
+    // CRC includes Type and Payload
+    // Buffer indices involved: 2 ... (2 + payload_len)
+    // Count = 1 + payload_len
+    buffer[3 + payload_len] = crsf_crc8(&buffer[2], 1 + payload_len);
+    
+    int packet_size = length + 2;
+    
+    return write(crsf->fd, buffer, packet_size);
+}
+
+int crsf_send_telemetry_flight_mode(crsf_t* crsf, const char* mode_string) {
+    if (!crsf || !mode_string) return -1;
+    
+    // Flight Mode frame type is 0x21
+    // Payload is just the null-terminated string (including null terminator)
+    int len = strlen(mode_string) + 1; 
+    
+    // CRSF limits are tight, ensure we don't overflow
+    if (len > 60) len = 60; // Truncate if necessary (leaving room for header/crc)
+    
+    return crsf_write_packet(crsf, 0x21, (const uint8_t*)mode_string, len);
+}
+
 bool crsf_is_connected(const crsf_t* crsf) {
     return crsf ? crsf->connected : false;
 }

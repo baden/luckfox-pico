@@ -44,4 +44,7 @@ int crsf_get_channels(const crsf_t* crsf, crsf_channels_t* channels);
 // Reconnect if disconnected
 int crsf_reconnect(crsf_t* crsf);
 
+// Send telemetry: Flight Mode (Text string, max ~14 chars recommended)
+int crsf_send_telemetry_flight_mode(crsf_t* crsf, const char* mode_string);
+
 #endif // CRSF_H

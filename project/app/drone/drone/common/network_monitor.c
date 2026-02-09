@@ -40,8 +40,8 @@ static unsigned short checksum(void *b, int len) {
 }
 
 // Low-level ping implementation using raw sockets
-// Returns: true if reply received, false on timeout/error
-static bool ping_host(const char *ip_addr, int timeout_ms) {
+// Returns: latency in ms if reply received, -1 on timeout/error
+static int ping_host(const char *ip_addr, int timeout_ms) {
     int sockfd;
     struct sockaddr_in addr;
     struct icmp icmp_hdr;
@@ -53,12 +53,12 @@ static bool ping_host(const char *ip_addr, int timeout_ms) {
     static uint16_t global_seq = 0;
 
     // Validate IP
-    if (!ip_addr || strlen(ip_addr) == 0) return false;
+    if (!ip_addr || strlen(ip_addr) == 0) return -1;
 
     // Create raw socket
     sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
     if (sockfd < 0) {
-        return false;
+        return -1;
     }
 
     // Set non-blocking
@@ -69,7 +69,7 @@ static bool ping_host(const char *ip_addr, int timeout_ms) {
     addr.sin_family = AF_INET;
     if (inet_pton(AF_INET, ip_addr, &addr.sin_addr) <= 0) {
         close(sockfd);
-        return false;
+        return -1;
     }
 
     int my_pid = getpid() & 0xFFFF;
@@ -87,13 +87,13 @@ static bool ping_host(const char *ip_addr, int timeout_ms) {
     // Send packet
     if (sendto(sockfd, &icmp_hdr, sizeof(icmp_hdr), 0, (struct sockaddr *)&addr, sizeof(addr)) <= 0) {
         close(sockfd);
-        return false;
+        return -1;
     }
 
     // Get start time
     gettimeofday(&start_tv, NULL);
     
-    bool success = false;
+    int latency = -1;
     
     while (1) {
         // Calculate remaining time
@@ -132,7 +132,11 @@ static bool ping_host(const char *ip_addr, int timeout_ms) {
                     if (icmp->icmp_type == ICMP_ECHOREPLY && icmp->icmp_id == my_pid) {
                         // Check if it matches our sequence (CRITICAL for avoiding late packets from previous pings)
                         if (icmp->icmp_seq == my_seq) {
-                            success = true;
+                            gettimeofday(&current_tv, NULL);
+                            latency = (current_tv.tv_sec - start_tv.tv_sec) * 1000 + 
+                                      (current_tv.tv_usec - start_tv.tv_usec) / 1000;
+                            // Ensure latency is at least 1ms to distinguish from 0 (fail) if we used 0 as fail
+                            if (latency < 1) latency = 1;
                             break; // Found our packet!
                         }
                     }
@@ -146,7 +150,7 @@ static bool ping_host(const char *ip_addr, int timeout_ms) {
     }
 
     close(sockfd);
-    return success;
+    return latency;
 }
 
 // Check if interface is UP (Layer 1/2) via sysfs
@@ -207,9 +211,9 @@ static void* network_monitor_thread_func(void* arg) {
         // 1. Check eth0
         bool eth_phys_up = is_interface_up("eth0");
         if (eth_phys_up) {
-            bool ping_eth = ping_host(g_config.eth_gateway, 200); // 200ms timeout
-            local_state.eth_status = ping_eth ? 2 : 1;
-            // printf("Eth0: Link UP, Ping %s\n", ping_eth ? "OK" : "FAIL");
+            int ping_eth = ping_host(g_config.eth_gateway, 200); // 200ms timeout
+            local_state.eth_status = (ping_eth >= 0) ? 2 : 1;
+            // printf("Eth0: Link UP, Ping %s\n", (ping_eth >= 0) ? "OK" : "FAIL");
         } else {
             local_state.eth_status = 0;
             // printf("Eth0: Link DOWN\n");
@@ -218,35 +222,30 @@ static void* network_monitor_thread_func(void* arg) {
         // 2. Check wg0
         bool wg_phys_up = is_interface_up("wg0");
         if (wg_phys_up) {
-            bool ping_wg = ping_host(g_config.wg_gateway, 500); // 500ms timeout (VPN might be slower to respond)
-            local_state.wg_status = ping_wg ? 2 : 1;
-            // printf("WG0: Link UP, Ping %s\n", ping_wg ? "OK" : "FAIL");
+            int ping_wg = ping_host(g_config.wg_gateway, 500); // 500ms timeout
+            local_state.wg_status = (ping_wg >= 0) ? 2 : 1;
+            // printf("WG0: Link UP, Ping %s\n", (ping_wg >= 0) ? "OK" : "FAIL");
         } else {
             local_state.wg_status = 0;
             // printf("WG0: Link DOWN\n");
         }
 
         // 3. Check Operator (Only if eth+wg valid, as per requirements)
-        // Requirement: "При умові шо перші два пункти працюють всі умови"
-        // Interpreted as: eth0 is working (status >= 1? or 2?) and wg0 is working.
-        // Usually VPN depends on Eth, so if WG is up and pinging, Eth is likely OK.
-        // Let's assume "working" means Ping OK (status == 2).
         if (local_state.eth_status == 2 && local_state.wg_status == 2) {
-            local_state.operator_ping = ping_host(g_config.operator_ip, 500);
+            int ping_op = ping_host(g_config.operator_ip, 500);
+            local_state.operator_ping = (ping_op >= 0);
+            local_state.operator_latency_ms = ping_op;
         } else {
             local_state.operator_ping = false;
+            local_state.operator_latency_ms = -1;
         }
 
         // 4. Check LAN devices (Only if eth0 has 10.0.0.0/16 address)
         if (local_state.eth_status >= 1) { // If link is at least UP
              if (check_subnet_10_0("eth0")) {
-                 local_state.dev1_ping = ping_host(g_config.dev1_ip, 100);
-                 local_state.dev2_ping = ping_host(g_config.dev2_ip, 100);
-                 local_state.dev3_ping = ping_host(g_config.dev3_ip, 100);
-                //  printf("LAN Devices: Dev1 %s, Dev2 %s, Dev3 %s\n",
-                //         local_state.dev1_ping ? "OK" : "FAIL",
-                //         local_state.dev2_ping ? "OK" : "FAIL",
-                //         local_state.dev3_ping ? "OK" : "FAIL");
+                 local_state.dev1_ping = (ping_host(g_config.dev1_ip, 100) >= 0);
+                 local_state.dev2_ping = (ping_host(g_config.dev2_ip, 100) >= 0);
+                 local_state.dev3_ping = (ping_host(g_config.dev3_ip, 100) >= 0);
              }
         }
 
@@ -257,6 +256,7 @@ static void* network_monitor_thread_func(void* arg) {
         g_state.eth_status = local_state.eth_status;
         g_state.wg_status = local_state.wg_status;
         g_state.operator_ping = local_state.operator_ping;
+        g_state.operator_latency_ms = local_state.operator_latency_ms;
         g_state.dev1_ping = local_state.dev1_ping;
         g_state.dev2_ping = local_state.dev2_ping;
         g_state.dev3_ping = local_state.dev3_ping;
