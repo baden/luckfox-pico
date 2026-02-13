@@ -130,12 +130,42 @@
 
             // Update Main Video
             if (mainVideo.src !== mainUrl.href) {
-                mainVideo.src = mainUrl.href; 
+                // If we are changing the source, we need to stop the current stream.
+                // However, calling ondisconnect() directly can cause errors if not handled carefully.
+                // The issue: ondisconnect() sets video.src='', triggering an error event on the video element.
+                
+                // Better approach: Check if connected, close WS manually if needed, then set src.
+                // But we don't have access to internal .ws property easily.
+                
+                // Let's try just setting .src. If the previous connection isn't closed, onconnect() returns false.
+                // We need a way to force a new connection.
+                
+                // If we look at video-rtc.js, ondisconnect does:
+                // this.wsState = WebSocket.CLOSED;
+                // if (this.ws) { this.ws.close(); this.ws = null; }
+                // ...
+                // this.video.src = '';
+                
+                // To avoid the 15s delay (RECONNECT_TIMEOUT), we must ensure onclose() doesn't trigger a retry.
+                // ondisconnect sets wsState=CLOSED, so onclose() should return early.
+                
+                // The error "MEDIA_ERR_SRC_NOT_SUPPORTED" comes from video.src='' inside ondisconnect.
+                // We can ignore it, or prevent it.
+                
+                // Let's try a small timeout to allow the cleanup to happen before starting the new stream.
+                if (mainVideo.ondisconnect) mainVideo.ondisconnect();
+                
+                setTimeout(() => {
+                    mainVideo.src = mainUrl.href;
+                }, 100);
             }
 
             // Update PIP Video
             if (pipVideo.src !== pipUrl.href) {
-                pipVideo.src = pipUrl.href;
+                if (pipVideo.ondisconnect) pipVideo.ondisconnect();
+                setTimeout(() => {
+                    pipVideo.src = pipUrl.href;
+                }, 100);
             }
         }
 
