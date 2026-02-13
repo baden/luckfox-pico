@@ -4,6 +4,7 @@ let ws = null;
 let reconnectTimeout = null;
 let wsConnected = false;
 let droneId = localStorage.getItem('droneId') || '';
+let currentArmChannel = localStorage.getItem('armChannel') || 'disabled';
 
 // Status Management
 function updateSystemStatus(text, isError) {
@@ -380,20 +381,34 @@ function updateGamepadStatus() {
         }
         if (wsConnected && ws && ws.readyState === WebSocket.OPEN && needSend) {
             const processedData = prepareData(gamepad);
-            // Flat JSON format for C backend
-            // Mapping based on prepareData output:
-            // axes[0]: RH (Roll), axes[1]: RV (Pitch), axes[2]: LV (Throttle), axes[3]: LH (Yaw)
-            // buttons[3]: D (Right Button) -> mapped to ARM
-            // Using "arm" key handles both arm (true) and disarm (false) in C backend
-            // console.log("Sending data:", processedData);
+
+            // Determine ARM state based on configuration (using raw gamepad input)
+            let armState = false;
+            if (currentArmChannel === 'disabled') {
+                armState = false;
+            } else if (currentArmChannel.startsWith('btn-')) {
+                const btnIndex = parseInt(currentArmChannel.split('-')[1]);
+                if (gamepad.buttons[btnIndex]) {
+                    armState = gamepad.buttons[btnIndex].pressed;
+                }
+            } else if (currentArmChannel.startsWith('axis-')) {
+                const axisIndex = parseInt(currentArmChannel.split('-')[1]);
+                if (gamepad.axes[axisIndex] !== undefined) {
+                    armState = gamepad.axes[axisIndex] > 0.5;
+                }
+            }
+
             const data = {
-                // arm: processedData.buttons[3] === 1,
-                arm: processedData.buttons[0] === 1,
-                // arm: processedData.axes[4] > 0.5, // Using S1 wheel position for arming
+                arm: armState,
+                // Legacy fields (still used by backend?)
                 a0: processedData.axes[0],
                 a1: processedData.axes[1],
                 a2: processedData.axes[2],
-                a3: processedData.axes[3]
+                a3: processedData.axes[3],
+                
+                // New fields as requested
+                axes: processedData.axes, 
+                buttons: processedData.buttons
             };
             ws.send(JSON.stringify(data));
             lastSendTime = currentTime;
@@ -544,6 +559,35 @@ document.addEventListener('DOMContentLoaded', function() {
     const settingsModal = document.getElementById('settings-modal');
     const closeSettings = document.getElementById('close-settings');
     const droneIdInput = document.getElementById('drone-id');
+    const armChannelSelect = document.getElementById('arm-channel');
+
+    // Populate Arm Channel Select
+    if (armChannelSelect) {
+        // Buttons 0-15
+        for (let i = 0; i < 16; i++) {
+            const opt = document.createElement('option');
+            opt.value = `btn-${i}`;
+            opt.textContent = `Button ${i}`;
+            armChannelSelect.appendChild(opt);
+        }
+        // Axes 0-7
+        for (let i = 0; i < 8; i++) {
+            const opt = document.createElement('option');
+            opt.value = `axis-${i}`;
+            opt.textContent = `Axis ${i} (>0.5)`;
+            armChannelSelect.appendChild(opt);
+        }
+        
+        // Load saved value
+        armChannelSelect.value = currentArmChannel;
+
+        // Save on change
+        armChannelSelect.addEventListener('change', () => {
+            currentArmChannel = armChannelSelect.value;
+            localStorage.setItem('armChannel', currentArmChannel);
+            console.log("ARM Channel set to:", currentArmChannel);
+        });
+    }
 
     // Завантажити назву дрона з LocalStorage при старті
     if (droneIdInput) {

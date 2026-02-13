@@ -70,6 +70,15 @@
             <h2>Settings</h2>
             
             <div class="setting-section">
+                <h3>Controls</h3>
+                <label for="arm-channel">ARM Channel:</label>
+                <select id="arm-channel" class="settings-select">
+                    <option value="disabled">Disabled</option>
+                    <!-- Options populated by JS -->
+                </select>
+            </div>
+
+            <div class="setting-section">
                 <h3>Local</h3>
                 <label for="drone-id">Drone ID:</label>
                 <input type="text" id="drone-id" name="drone-id" placeholder="Enter ID">
