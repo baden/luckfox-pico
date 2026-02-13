@@ -38,7 +38,7 @@
             </div>
 
             <!-- Diagnostics Toggle Button -->
-            <div id="diag-btn" class="icon-btn" title="Show Diagnostics">
+            <div id="diag-btn" class="icon-btn" title="Діагностіка">
                 <svg viewBox="0 0 24 24">
                     <path d="M3 3h18v18H3V3zm16 16V5H5v14h14zM7 7h10v2H7V7zm0 4h10v2H7v-2zm0 4h7v2H7v-2z"/>
                 </svg>
@@ -47,20 +47,15 @@
 
         <!-- Diagnostics Overlay (Hidden by default) -->
         <div id="diagnostics-overlay" class="diagnostics-overlay ui-element">
-            <h3>Diagnostics</h3>
-            <div id="gamepad-status" style="margin-bottom:10px; font-size:12px; color:#aaa;">Waiting for gamepad...</div>
-            <div id="connection-status" style="margin-bottom:10px; font-size:12px; color:#aaa;">Waiting for server...</div>
-            
-            <h4>Axes</h4>
+            <h3>Діагностіка</h3>
+            <div id="gamepad-status" style="margin-bottom:10px; font-size:12px; color:#aaa;">Чекаємо на пульт...</div>
+            <div id="connection-status" style="margin-bottom:10px; font-size:12px; color:#aaa;">Підключаємось до дрона...</div>
             <div id="axes-display" class="control-group"></div>
-            
-            <h4>Buttons</h4>
             <div id="buttons-display" class="control-group"></div>
         </div>
 
         <!-- Status Bar (Errors/Warnings only) -->
         <div id="status-bar" class="ui-element"></div>
-
     </div>
 
     <!-- Settings Modal (Same as before) -->
@@ -70,8 +65,8 @@
             <h2>Settings</h2>
             
             <div class="setting-section">
-                <h3>Controls</h3>
-                <label for="arm-channel">ARM Channel:</label>
+                <!-- <h3>Керування</h3> -->
+                <label for="arm-channel">Канал для ARM:</label>
                 <select id="arm-channel" class="settings-select">
                     <option value="disabled">Disabled</option>
                     <!-- Options populated by JS -->
@@ -79,35 +74,35 @@
                 
                 <div style="margin-top: 10px; display: flex; align-items: center;">
                     <input type="checkbox" id="background-mode" style="width: auto; margin-right: 8px;">
-                    <label for="background-mode" style="margin-bottom: 0;">Enable Background Mode (Audio Hack)</label>
+                    <label for="background-mode" style="margin-bottom: 0;">Не давати засинати браузеру (Audio Hack)</label>
                 </div>
                 <div style="font-size: 10px; color: #666; margin-top: 4px;">
-                    Prevents controls from freezing when tab is hidden. Requires user interaction to start.
+                    Намагаємось не дати браузеру ігнорувати керування коли браузер не активний.
                 </div>
             </div>
 
-            <div class="setting-section">
+            <!-- <div class="setting-section">
                 <h3>Local</h3>
                 <label for="drone-id">Drone ID:</label>
                 <input type="text" id="drone-id" name="drone-id" placeholder="Enter ID">
-            </div>
+            </div> -->
 
             <div class="setting-section">
-                <h3>Remote Parameters</h3>
+                <h3>Параметри дрона</h3>
                 <div class="settings-actions">
-                    <button id="refresh-settings" class="btn-secondary">Load Parameters</button>
+                    <button id="refresh-settings" class="btn-secondary">Завантажити з дрона</button>
                 </div>
                 <div id="settings-list">
                     <span style="color:#666; font-size:12px;">Click 'Load' to fetch settings...</span>
                 </div>
                 <div class="settings-actions" id="save-settings-container" style="display:none;">
-                        <button id="save-settings" class="btn-primary">Save Changes</button>
+                        <button id="save-settings" class="btn-primary">Встановити значення</button>
                 </div>
             </div>
 
-            <div class="settings-footer" style="margin-top: 20px; border-top: 1px solid #444; padding-top: 10px;">
+            <!-- <div class="settings-footer" style="margin-top: 20px; border-top: 1px solid #444; padding-top: 10px;">
                 <button id="restart-drone" class="restart-button" style="background:#d32f2f;">Restart Drone</button>
-            </div>
+            </div> -->
         </div>
     </div>
 
