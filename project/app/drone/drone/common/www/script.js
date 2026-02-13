@@ -1,4 +1,7 @@
 let gamepad = null;
+let virtualAxes = [0, 0];
+let isVirtualActive = false;
+let isVirtualArmed = false;
 let requestAnimationFrameId = null;
 let ws = null;
 let reconnectTimeout = null;
@@ -426,59 +429,116 @@ function isGamepadChanged() {
 
 // Функція для оновлення статусу джойстика
 function updateGamepadStatus() {
+    let axesToSend = [0, 0, 0, 0];
+    let buttonsToSend = []; 
+    let armState = false;
+
+    // --- ARM Logic Helper ---
+    const updateArmVisual = (armed) => {
+        const btn = document.getElementById('arm-btn');
+        if (btn) {
+            if (armed) {
+                btn.classList.add('armed');
+                // btn.innerHTML = '<span style="font-weight:bold; font-size:12px;">ARMED</span>';
+            } else {
+                btn.classList.remove('armed');
+                // btn.innerHTML = '<span style="font-weight:bold; font-size:12px;">ARM</span>';
+            }
+        }
+    };
+
     if (gamepad) {
-        // setConnectionStatus(`Підключено: ${gamepad.id} (Індекс: ${gamepad.index})`);
+        // --- Physical Gamepad Logic ---
+        // updateAxesDisplay(); // Call existing helpers
+        // updateButtonsDisplay();
+
         updateAxesDisplay();
         updateButtonsDisplay();
 
-        const currentTime = Date.now();
-        let needSend = false;
-        let ping = false;
-        if (isGamepadChanged()) {
-            needSend = true;
-            ping = false;
-        } else if (currentTime - lastSendTime > sendInterval) {
-            needSend = true;
-            ping = true;
-        }
-        if (wsConnected && ws && ws.readyState === WebSocket.OPEN && needSend) {
-            const processedData = prepareData(gamepad);
+        const processed = prepareData(gamepad);
+        axesToSend = processed.axes;
+        buttonsToSend = processed.buttons;
+        
+        // Update Visual Joystick to reflect physical input
+        // Invert Y axis for visualization to match physical movement
+        updateJoystickVisual(axesToSend[0], -axesToSend[1]); 
 
-            // Determine ARM state based on configuration (using raw gamepad input)
-            let armState = false;
-            if (currentArmChannel === 'disabled') {
-                armState = false;
-            } else if (currentArmChannel.startsWith('btn-')) {
-                const btnIndex = parseInt(currentArmChannel.split('-')[1]);
-                if (gamepad.buttons[btnIndex]) {
-                    armState = gamepad.buttons[btnIndex].pressed;
-                }
-            } else if (currentArmChannel.startsWith('axis-')) {
-                const axisIndex = parseInt(currentArmChannel.split('-')[1]);
-                if (gamepad.axes[axisIndex] !== undefined) {
-                    armState = gamepad.axes[axisIndex] > 0.5;
-                }
-            }
-
-            const data = {
-                arm: armState,
-                // Legacy fields (still used by backend?)
-                a0: processedData.axes[0],
-                a1: processedData.axes[1],
-                a2: processedData.axes[2],
-                a3: processedData.axes[3],
-                
-                // New fields as requested
-                axes: processedData.axes, 
-                buttons: processedData.buttons
-            };
-            ws.send(JSON.stringify(data));
-            lastSendTime = currentTime;
-            lastAxes = gamepad.axes.slice();
-            lastButtons = gamepad.buttons.map(b => ({ pressed: b.pressed, value: b.value }));
+        // Determine ARM state based on configuration
+        if (currentArmChannel === 'disabled') {
+            armState = false;
+        } else if (currentArmChannel.startsWith('btn-')) {
+            const btnIndex = parseInt(currentArmChannel.split('-')[1]);
+            if (gamepad.buttons[btnIndex]) armState = gamepad.buttons[btnIndex].pressed;
+        } else if (currentArmChannel.startsWith('axis-')) {
+            const axisIndex = parseInt(currentArmChannel.split('-')[1]);
+            if (gamepad.axes[axisIndex] !== undefined) armState = gamepad.axes[axisIndex] > 0.5;
         }
+        
+        // Sync virtual state to physical to avoid jumps when disconnecting
+        isVirtualArmed = armState;
+
     } else {
-        setConnectionStatus('Очікування підключення джойстика...');
+        // --- Virtual Joystick Logic ---
+        axesToSend[0] = virtualAxes[0];
+        axesToSend[1] = virtualAxes[1];
+        
+        if (isVirtualActive) {
+             setConnectionStatus('Віртуальний джойстик активний', false);
+        } else {
+             setConnectionStatus('Очікування підключення джойстика...', false);
+        }
+        
+        // Use virtual switch state
+        armState = isVirtualArmed;
+    }
+    
+    // Update UI Button
+    updateArmVisual(armState);
+
+    // --- Send Logic ---
+    const currentTime = Date.now();
+    let needSend = false;
+
+    if (gamepad) {
+         if (isGamepadChanged()) needSend = true;
+    } else {
+        // Send if active, or if values are non-zero, or if we need to return to center (last was non-zero)
+        const isNonZero = (Math.abs(virtualAxes[0]) > 0.001 || Math.abs(virtualAxes[1]) > 0.001);
+        const wasNonZero = (lastAxes[0] !== 0 || lastAxes[1] !== 0);
+        
+        if (isVirtualActive || isNonZero || wasNonZero) {
+             needSend = true;
+        }
+    }
+    
+    // Heartbeat
+    if (currentTime - lastSendTime > sendInterval) {
+        needSend = true;
+    }
+
+    if (wsConnected && ws && ws.readyState === WebSocket.OPEN && needSend) {
+        const data = {
+            arm: armState,
+            a0: axesToSend[0],
+            a1: axesToSend[1],
+            a2: axesToSend[2] || 0,
+            a3: axesToSend[3] || 0,
+            axes: axesToSend,
+            buttons: buttonsToSend
+        };
+        
+        ws.send(JSON.stringify(data));
+        lastSendTime = currentTime;
+        
+        if (gamepad) {
+             lastAxes = gamepad.axes.slice();
+             lastButtons = gamepad.buttons.map(b => ({ pressed: b.pressed, value: b.value }));
+        } else {
+             lastAxes = [virtualAxes[0], virtualAxes[1], 0, 0]; // Mock structure
+             lastButtons = [];
+        }
+    } else if (!gamepad) {
+         // If not sending (idle), make sure we don't spam status
     }
 }
 
@@ -731,7 +791,135 @@ document.addEventListener('DOMContentLoaded', function() {
         collectAndSendSettings();
     });
 
+    initVirtualJoystick(); // Initialize Virtual Joystick listeners
+
 });
 
 
 // ws.onopen, ws.onmessage, ws.onclose, ws.onerror тепер у connectWebSocket()
+
+// --- Virtual Joystick Logic ---
+
+function updateJoystickVisual(x, y) {
+    const stick = document.getElementById('virtual-joystick-stick');
+    if (stick) {
+        // x, y are -1..1
+        // Container is 150px, Stick is 50px. Max travel is 50px radius.
+        const maxDist = 50; 
+        const transX = x * maxDist;
+        const transY = y * maxDist;
+        stick.style.transform = `translate(${transX}px, ${transY}px)`;
+    }
+}
+
+function initVirtualJoystick() {
+    const container = document.getElementById('virtual-joystick-container');
+    const stick = document.getElementById('virtual-joystick-stick');
+    
+    if (!container || !stick) return;
+
+    const maxDist = 50; // pixels radius
+    let startX = 0;
+    let startY = 0;
+
+    const handleStart = (clientX, clientY) => {
+        isVirtualActive = true;
+        const rect = container.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        
+        // Calculate initial offset if starting not on center? 
+        // Usually virtual joystick snaps to finger. 
+        // But here we have a fixed container. So we calculate distance from center.
+        handleMove(clientX, clientY);
+    };
+
+    const handleMove = (clientX, clientY) => {
+        if (!isVirtualActive) return;
+        const rect = container.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+
+        let deltaX = clientX - centerX;
+        let deltaY = clientY - centerY;
+
+        // Clamp distance
+        const dist = Math.sqrt(deltaX*deltaX + deltaY*deltaY);
+        if (dist > maxDist) {
+            const ratio = maxDist / dist;
+            deltaX *= ratio;
+            deltaY *= ratio;
+        }
+
+        // Normalize to -1..1
+        virtualAxes[0] = deltaX / maxDist;
+        virtualAxes[1] = deltaY / maxDist;
+
+        updateJoystickVisual(virtualAxes[0], virtualAxes[1]);
+    };
+
+    const handleEnd = () => {
+        isVirtualActive = false;
+        virtualAxes = [0, 0];
+        updateJoystickVisual(0, 0);
+    };
+
+    // Touch Events
+    container.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        handleStart(e.touches[0].clientX, e.touches[0].clientY);
+    }, {passive: false});
+
+    container.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        handleMove(e.touches[0].clientX, e.touches[0].clientY);
+    }, {passive: false});
+
+    container.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        handleEnd();
+    });
+
+    // Mouse Events
+    container.addEventListener('mousedown', (e) => {
+        handleStart(e.clientX, e.clientY);
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (isVirtualActive) {
+            handleMove(e.clientX, e.clientY);
+        }
+    });
+
+    window.addEventListener('mouseup', () => {
+        if (isVirtualActive) {
+            handleEnd();
+        }
+    });
+}
+
+// --- ARM Button Listener ---
+document.getElementById('arm-btn').addEventListener('click', () => {
+    // Only allow toggling if NO gamepad is connected, OR if user wants to force it.
+    // Logic: If gamepad is connected, we sync isVirtualArmed = physicalArmState in loop.
+    // So clicking this might be overwritten immediately in next frame if gamepad is active.
+    // BUT, if we click it, maybe we want to force toggle? 
+    // Usually physical switch is absolute. 
+    // Let's allow toggle, but know it might flicker if gamepad overrides.
+    // Better UX: If gamepad connected, this button is indicator only (maybe add visual cue?)
+    // For now, simple toggle.
+    
+    if (!gamepad) {
+        isVirtualArmed = !isVirtualArmed;
+        // Visual update happens in next loop
+        // But for responsiveness, we can update immediately
+        const btn = document.getElementById('arm-btn');
+        if (isVirtualArmed) btn.classList.add('armed');
+        else btn.classList.remove('armed');
+        
+        // Force immediate send?
+        updateGamepadStatus();
+    } else {
+        alert("Для керування ARM використовуйте фізичний пульт!");
+    }
+});

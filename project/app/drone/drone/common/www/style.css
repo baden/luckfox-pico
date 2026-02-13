@@ -236,6 +236,39 @@ video-stream#pip-video {
     cursor: pointer;
 }
 
+/* Virtual Joystick */
+#virtual-joystick-container {
+    position: absolute;
+    bottom: 40px;
+    right: 40px;
+    width: 150px;
+    height: 150px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    backdrop-filter: blur(4px);
+    touch-action: none; /* Prevent scrolling */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: background 0.2s;
+}
+
+#virtual-joystick-container:active {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+#virtual-joystick-stick {
+    width: 50px;
+    height: 50px;
+    background: rgba(76, 175, 80, 0.8);
+    border-radius: 50%;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    pointer-events: none; /* Let clicks pass to container */
+    transform: translate(0px, 0px); /* Will be updated by JS */
+    transition: transform 0.05s linear; /* Smooth movement */
+}
+
 /* Responsive Tweaks */
 @media (max-width: 768px) {
     :root {
@@ -257,4 +290,29 @@ video-stream#pip-video {
         left: 10px;
         bottom: 60px;
     }
+    
+    /* Move joystick slightly for mobile */
+    #virtual-joystick-container {
+        bottom: 20px;
+        right: 20px;
+        width: 120px;
+        height: 120px;
+    }
+    
+    #virtual-joystick-stick {
+        width: 40px;
+        height: 40px;
+    }
+}
+
+#arm-btn.armed {
+    background-color: var(--danger-color);
+    border-color: var(--danger-color);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
 }
