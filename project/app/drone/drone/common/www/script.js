@@ -5,25 +5,56 @@ let reconnectTimeout = null;
 let wsConnected = false;
 let droneId = localStorage.getItem('droneId') || '';
 
-function setGamepadStatus(text, isConneced) {
-    console.log("setGamepadStatus:", text, isConneced);
-    const statusDiv = document.getElementById('gamepad-status');
-    statusDiv.textContent = text;
-    statusDiv.style.color = isConneced ? 'black' : 'red';
-    const iconDiv = document.getElementById('gamepad-icon');
-    if (isConneced) {
-        iconDiv.classList.remove('disconnected');
-        iconDiv.classList.add('connected');
+// Status Management
+function updateSystemStatus(text, isError) {
+    const statusBar = document.getElementById('status-bar');
+    if (!statusBar) return;
+
+    if (isError) {
+        statusBar.textContent = text;
+        statusBar.style.display = 'block';
+        statusBar.style.backgroundColor = 'rgba(255, 0, 0, 0.8)';
     } else {
-        iconDiv.classList.remove('connected');
-        iconDiv.classList.add('disconnected');
+        // If not error (e.g. connected), hide after a short delay or immediately
+        statusBar.textContent = text;
+        statusBar.style.backgroundColor = 'rgba(0, 128, 0, 0.8)';
+        setTimeout(() => {
+            if (statusBar.textContent === text) { // Only hide if text hasn't changed to an error
+                statusBar.style.display = 'none';
+            }
+        }, 3000);
+    }
+}
+
+function setGamepadStatus(text, isConnected) {
+    console.log("Gamepad Status:", text, isConnected);
+    const diagStatus = document.getElementById('gamepad-status');
+    if (diagStatus) {
+        diagStatus.textContent = text;
+        diagStatus.style.color = isConnected ? '#4CAF50' : '#f44336';
+    }
+    
+    // Only show in main status bar if NOT connected
+    if (!isConnected) {
+        updateSystemStatus("Gamepad Disconnected", true);
+    } else {
+        updateSystemStatus("Gamepad Connected", false);
     }
 }
 
 function setConnectionStatus(text, isError = false) {
-    const statusDiv = document.getElementById('connection-status');
-    statusDiv.textContent = text;
-    statusDiv.style.color = isError ? 'red' : 'black';
+    const diagStatus = document.getElementById('connection-status');
+    if (diagStatus) {
+        diagStatus.textContent = text;
+        diagStatus.style.color = isError ? '#f44336' : '#4CAF50';
+    }
+    
+    // Only show in main status bar if error
+    if (isError) {
+        updateSystemStatus(text, true);
+    } else if (text.includes("Connected") || text.includes("підключено")) {
+         updateSystemStatus(text, false);
+    }
 }
 
 // Global object to store current drone settings
@@ -117,8 +148,9 @@ function collectAndSendSettings() {
 
 function connectWebSocket() {
     setConnectionStatus('Підключення до WebSocket-сервера...');
-    // Connect to the drone's IP on port 80 (implied)
-    ws = new WebSocket("ws://10.8.3.2");
+    // Connect to the drone's IP on port 80 (implied), using current hostname
+    const host = window.location.hostname || '10.8.3.2'; // Fallback if local file
+    ws = new WebSocket(`ws://${host}`);
 
     ws.onopen = () => {
         wsConnected = true;
@@ -373,42 +405,51 @@ function updateGamepadStatus() {
     }
 }
 
-// Функція для оновлення відображення осей
+// Functions for Axis/Button UI Updates
 function updateAxesDisplay() {
     if (!gamepad) return;
+    const container = document.getElementById('axes-display');
+    if (!container) return; // Container might be hidden/lazy loaded
+
     for (let i = 0; i < gamepad.axes.length; i++) {
         let axisDiv = document.getElementById(`axis${i}`);
         if (!axisDiv) {
             axisDiv = document.createElement('div');
             axisDiv.id = `axis${i}`;
             axisDiv.className = 'control-item axis-item';
-            document.getElementById('axes-display').appendChild(axisDiv);
+            container.appendChild(axisDiv);
         }
         const axisValue = gamepad.axes[i];
-        axisDiv.textContent = `${i}: ${axisValue.toFixed(2)}`;
-        // Візуалізація заповнення
-        const percent = Math.round((axisValue + 1) * 50); // -1 -> 0%, 0 -> 50%, 1 -> 100%
-        axisDiv.style.background = `linear-gradient(to right, #4fc3f7 ${percent}%, #f7f7f7 ${percent}%)`;
+        axisDiv.textContent = `A${i}: ${axisValue.toFixed(2)}`;
+        
+        // Visual indicator (border color or background gradient)
+        const percent = Math.round((axisValue + 1) * 50); 
+        axisDiv.style.background = `linear-gradient(to right, rgba(76, 175, 80, 0.4) ${percent}%, rgba(255,255,255,0.1) ${percent}%)`;
     }
 }
 
-// Функція для оновлення відображення кнопок
 function updateButtonsDisplay() {
     if (!gamepad) return;
+    const container = document.getElementById('buttons-display');
+    if (!container) return;
+
     for (let i = 0; i < gamepad.buttons.length; i++) {
         let buttonDiv = document.getElementById(`button${i}`);
         if (!buttonDiv) {
             buttonDiv = document.createElement('div');
             buttonDiv.id = `button${i}`;
             buttonDiv.className = 'control-item button-item';
-            document.getElementById('buttons-display').appendChild(buttonDiv);
+            container.appendChild(buttonDiv);
         }
         const button = gamepad.buttons[i];
-        buttonDiv.textContent = `${i}: ${button.pressed ? '+' : '-'}`;
+        buttonDiv.textContent = `B${i}`;
+        
         if (button.pressed) {
-            buttonDiv.style.background = 'linear-gradient(to right, #4fc3f7 100%, #f7f7f7 0%)';
+            buttonDiv.style.background = '#4CAF50';
+            buttonDiv.style.color = 'white';
         } else {
-            buttonDiv.style.background = 'linear-gradient(to right, #f7f7f7 0%, #f7f7f7 100%)';
+            buttonDiv.style.background = 'rgba(255,255,255,0.1)';
+            buttonDiv.style.color = '#aaa';
         }
     }
 }

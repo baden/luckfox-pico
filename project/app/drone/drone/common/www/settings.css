@@ -19,13 +19,13 @@
     flex-direction: column;
 }
 
-.setting-item label {
+.setting-item label, .setting-section label {
     font-size: 12px;
     color: #aaa;
     margin-bottom: 4px;
 }
 
-.setting-item input {
+.setting-item input, .setting-section input {
     background: #333;
     border: 1px solid #555;
     color: white;
