@@ -23,7 +23,24 @@ int idx = 0;
 int file = -1;
 uint8_t addr = 0x3c;
 int adapter_nr = 3; /* probably dynamically determined */
+static int i2c_error_occurred = 0;
 
+int linux_i2c_get_error(void) {
+    return i2c_error_occurred;
+}
+
+void linux_i2c_clear_error(void) {
+    i2c_error_occurred = 0;
+}
+
+void linux_i2c_deinit(void) {
+    if (file >= 0) {
+        close(file);
+        file = -1;
+        fprintf(stderr, "i2c file closed\n");
+    }
+    i2c_error_occurred = 0;
+}
 
 uint8_t
 u8x8_byte_linux_i2c(u8x8_t *u8x8,
@@ -48,11 +65,13 @@ u8x8_byte_linux_i2c(u8x8_t *u8x8,
 		file = open(filename, O_RDWR);
 		if (file < 0) {
 			fprintf(stderr, "can't open i2c\n");
+            i2c_error_occurred = 1;
 			return(errno);
 		}
 		fprintf(stderr, "opened i2c file %d\n", file);
 		if (ioctl(file, I2C_SLAVE, addr) < 0) { // u8x8_GetI2CAddress(u8x8)
 			fprintf(stderr, "can't set addr %0x\n", addr);
+            i2c_error_occurred = 1;
 			return(errno);
 		}
 		fprintf(stderr, "set i2c addr %0x\n", addr);
@@ -76,6 +95,7 @@ u8x8_byte_linux_i2c(u8x8_t *u8x8,
 		// Це еквівалентно i2c_smbus_write_i2c_block_data
         if (write(file, data, idx) != idx) {
             fprintf(stderr, "can't write data: %s\n", strerror(errno));
+            i2c_error_occurred = 1;
             return 0;
         }
 		break;

@@ -822,8 +822,8 @@ function updateJoystickVisual(x, y) {
     const stick = document.getElementById('virtual-joystick-stick');
     if (stick) {
         // x, y are -1..1
-        // Container is 150px, Stick is 50px. Max travel is 50px radius.
-        const maxDist = 50; 
+        // Visual travel limit (half of box size 150px)
+        const maxDist = 75; 
         const transX = x * maxDist;
         const transY = y * maxDist;
         stick.style.transform = `translate(${transX}px, ${transY}px)`;
@@ -836,19 +836,14 @@ function initVirtualJoystick() {
     
     if (!container || !stick) return;
 
-    const maxDist = 50; // pixels radius
+    // Max travel distance (visual limit)
+    const maxDist = 75; // 150px box / 2
     let startX = 0;
     let startY = 0;
 
     const handleStart = (clientX, clientY) => {
         isVirtualActive = true;
-        const rect = container.getBoundingClientRect();
-        const centerX = rect.left + rect.width / 2;
-        const centerY = rect.top + rect.height / 2;
-        
-        // Calculate initial offset if starting not on center? 
-        // Usually virtual joystick snaps to finger. 
-        // But here we have a fixed container. So we calculate distance from center.
+        // Just forward to move logic
         handleMove(clientX, clientY);
     };
 
@@ -861,13 +856,10 @@ function initVirtualJoystick() {
         let deltaX = clientX - centerX;
         let deltaY = clientY - centerY;
 
-        // Clamp distance
-        const dist = Math.sqrt(deltaX*deltaX + deltaY*deltaY);
-        if (dist > maxDist) {
-            const ratio = maxDist / dist;
-            deltaX *= ratio;
-            deltaY *= ratio;
-        }
+        // Square Clamping Logic
+        // Clamp each axis independently to maxDist
+        deltaX = Math.max(-maxDist, Math.min(maxDist, deltaX));
+        deltaY = Math.max(-maxDist, Math.min(maxDist, deltaY));
 
         // Normalize to -1..1
         virtualAxes[0] = deltaX / maxDist;

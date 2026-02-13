@@ -18,8 +18,11 @@
 
 
 uint8_t u8x8_byte_linux_i2c(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *arg_ptr);
-
 uint8_t u8x8_linux_i2c_delay (u8x8_t * u8x8, uint8_t msg, uint8_t arg_int, void *arg_ptr) ;
 
+// Error handling and cleanup functions
+int linux_i2c_get_error(void);
+void linux_i2c_clear_error(void);
+void linux_i2c_deinit(void);
 
 #endif // LINUXi2c

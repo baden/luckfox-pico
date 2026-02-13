@@ -190,10 +190,29 @@ static void* oled_thread_func(void* arg) {
         pthread_mutex_unlock(&g_control.mutex);
 
         // Update OLED display every 100ms (10fps for smooth animation)
-        oled_display(&status);
-        usleep(100000); // 100ms
+        if (oled_display(&status) != 0) {
+            fprintf(stderr, "Main: OLED Display Failed. Restarting OLED subsystem in 10s...\n");
+            oled_deinit();
+            
+            // Wait 10 seconds before retrying (check exit flag periodically)
+            for (int i = 0; i < 100; i++) {
+                if (g_control.should_exit) break;
+                usleep(100000); // 100ms * 100 = 10s
+            }
+            
+            if (!g_control.should_exit) {
+                if (oled_init() == 0) {
+                    printf("Main: OLED Re-initialized successfully\n");
+                } else {
+                    fprintf(stderr, "Main: OLED Re-initialization failed\n");
+                }
+            }
+        } else {
+            usleep(100000); // 100ms normal sleep
+        }
     }
     printf("OLED thread exiting\n");
+    oled_deinit(); // Clean up on exit
     return NULL;
 }
 

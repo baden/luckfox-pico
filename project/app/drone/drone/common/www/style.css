@@ -239,22 +239,34 @@ video-stream#pip-video {
 /* Virtual Joystick */
 #virtual-joystick-container {
     position: absolute;
-    bottom: 40px;
-    right: 40px;
-    width: 150px;
-    height: 150px;
-    background: rgba(255, 255, 255, 0.1);
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    border-radius: 50%;
-    backdrop-filter: blur(4px);
+    bottom: 20px;
+    right: 20px;
+    width: 260px; /* Increased hit zone size */
+    height: 260px;
+    background: transparent; /* Transparent hit zone */
+    border: none; /* No border on hit zone */
+    border-radius: 0; /* Square zone */
     touch-action: none; /* Prevent scrolling */
     display: flex;
     justify-content: center;
     align-items: center;
-    transition: background 0.2s;
+    z-index: 100; /* Ensure it's on top */
 }
 
-#virtual-joystick-container:active {
+/* Visual Boundary Box (Square) */
+#virtual-joystick-container::before {
+    content: '';
+    position: absolute;
+    width: 150px;
+    height: 150px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px; /* Slight roundness for aesthetics, or 0 for pure square */
+    pointer-events: none; /* Let clicks pass through */
+    backdrop-filter: blur(4px);
+}
+
+#virtual-joystick-container:active::before {
     background: rgba(255, 255, 255, 0.2);
 }
 
@@ -267,6 +279,7 @@ video-stream#pip-video {
     pointer-events: none; /* Let clicks pass to container */
     transform: translate(0px, 0px); /* Will be updated by JS */
     transition: transform 0.05s linear; /* Smooth movement */
+    z-index: 101;
 }
 
 /* Responsive Tweaks */
@@ -293,15 +306,18 @@ video-stream#pip-video {
     
     /* Move joystick slightly for mobile */
     #virtual-joystick-container {
-        bottom: 20px;
-        right: 20px;
-        width: 120px;
-        height: 120px;
+        bottom: 10px;
+        right: 10px;
+        width: 220px; /* Slightly smaller hit zone on mobile */
+        height: 220px;
     }
     
+    /* Keep visual box same size or adjust if needed */
+    /* If we keep it 150px, maxDist 75 works everywhere */
+    
     #virtual-joystick-stick {
-        width: 40px;
-        height: 40px;
+        width: 50px;
+        height: 50px;
     }
 }
 

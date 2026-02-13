@@ -86,47 +86,55 @@ int oled_init(void)
     u8g2_SetFont(&u8g2, u8g2_font_maniac_tf);
     u8g2_SetFontRefHeightText(&u8g2);
     u8g2_SetFontPosTop(&u8g2);
-
-    u8g2_DrawStr(&u8g2, 0, 0, "Loading...");
-
-    // u8g2_SetFont(&u8g2, u8g2_font_sticker100complete_tr);
-    // u8g2_SetFontRefHeightText(&u8g2);
-    // u8g2_SetFontPosTop(&u8g2);
     // u8g2_DrawStr(&u8g2, 0, 0, ".");
 
 
     u8g2_SendBuffer(&u8g2);
     flush_fb();
 
-
-    #if 0
-    // ssd1306_128x32_i2c_init();
-    ssd1306_platform_i2cConfig_t config;
-    // config.busId = 3;       // номер шини (якщо /dev/i2c-3)
-    // config.devAddr = 0x3C;  // адреса дисплея
-    // ssd1306_i2cInitEx(config.busId, config.devAddr);
-
-    #define OLED_BUS_ID 3
-    #define OLED_ADDR 0x3C
-    ssd1306_platform_i2cInit(OLED_BUS_ID, OLED_ADDR, &config);
-
-    ssd1306_128x32_i2c_init();
-
-    ssd1306_clearScreen();
-    ssd1306_setFixedFont(ssd1306xled_font6x8);
-    ssd1306_printFixed(0, 8, "Luckfox RV1106", STYLE_NORMAL);
-
-    #endif
+    // Check for initialization errors
+    if (linux_i2c_get_error()) {
+         printf("OLED: I2C Error during init\n");
+         linux_i2c_clear_error();
+         return -1;
+    }
 
     return 0;
 }
 
+void oled_deinit(void) {
+    printf("OLED: Deinitializing...\n");
+    // u8g2 doesn't have a specific deinit for Linux I2C that closes the fd,
+    // so we call our custom lower-level deinit.
+    #if defined(U8G2_USE_LINUX_I2C) && U8G2_USE_LINUX_I2C == 1
+    linux_i2c_deinit();
+    #endif
 
-void oled_display(const oled_status_t* status)
+    #if defined(U8G2_USE_LINUX_FB) && U8G2_USE_LINUX_FB == 1
+    if (my_fb_ptr && my_fb_ptr != MAP_FAILED) {
+        munmap(my_fb_ptr, my_fb_size);
+        my_fb_ptr = NULL;
+    }
+    if (my_fb_fd != -1) {
+        close(my_fb_fd);
+        my_fb_fd = -1;
+    }
+    #endif
+}
+
+
+int oled_display(const oled_status_t* status)
 {
+    // Check previous errors
+    if (linux_i2c_get_error()) {
+        linux_i2c_clear_error(); // Clear it so we don't get stuck, but return error
+        return -1;
+    }
+    
     u8g2_ClearBuffer(&u8g2);
 
     // --- 1. ARM State (Top Left) ---
+
     u8g2_SetFont(&u8g2, u8g2_font_profont17_tf); // Small clear font
     if (status->armed) {
         u8g2_DrawStr(&u8g2, 0, 0, "ARM");
@@ -241,4 +249,10 @@ void oled_display(const oled_status_t* status)
 
     u8g2_SendBuffer(&u8g2);
     flush_fb();
+
+    if (linux_i2c_get_error()) {
+        linux_i2c_clear_error();
+        return -1;
+    }
+    return 0;
 }
