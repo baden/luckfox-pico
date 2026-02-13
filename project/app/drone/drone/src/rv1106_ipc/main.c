@@ -16,6 +16,7 @@
 #include "../../common/web_server.h"
 #include "../../common/oled.h"
 #include "../../common/network_monitor.h"
+#include "../../common/settings.h"
 
 // Global control state
 typedef struct {
@@ -535,27 +536,39 @@ static void* control_thread_func(void* arg) {
 
         pthread_mutex_unlock(&g_control.mutex);
 
-        // Update servos if axes changed significantly
-        if (fabsf(current_axis_0 - prev_axis_0) > 0.01f || fabsf(current_axis_1 - prev_axis_1) > 0.01f) {
-            // Calculate servo values: left = axis0 + axis1, right = axis1 - axis0
-            servo_values_t servo_vals = {
-                .left_value = current_axis_0 + current_axis_1,
-                .right_value = current_axis_1 - current_axis_0
-            };
+        // Apply settings
+        float damping = settings_get_steering_damping();
+        float curve = settings_get_steering_damping_curve();
+        
+        // Apply damping (0.0 = no damping/full steer, 1.0 = full damping/no steer)
+        float steer_factor = 1.0f - damping;
+        if (steer_factor < 0.0f) steer_factor = 0.0f;
+        
+        // Apply simple curve logic if needed (Expo)
+        // For now just linear damping
+        float effective_steering = current_axis_0 * steer_factor;
 
-            // Clamp values to valid range
-            if (servo_vals.left_value < -1.0f) servo_vals.left_value = -1.0f;
-            if (servo_vals.left_value > 1.0f) servo_vals.left_value = 1.0f;
-            if (servo_vals.right_value < -1.0f) servo_vals.right_value = -1.0f;
-            if (servo_vals.right_value > 1.0f) servo_vals.right_value = 1.0f;
+        // Calculate servo values: left = axis1 + axis0, right = axis1 - axis0
+        // With damping: left = axis1 + effective_steering
+        
+        servo_values_t servo_vals = {
+            .left_value = current_axis_1 + effective_steering,
+            .right_value = current_axis_1 - effective_steering
+        };
 
-            pwm_control_set_servos(&g_pwm, &servo_vals);
+        // Clamp values to valid range
+        if (servo_vals.left_value < -1.0f) servo_vals.left_value = -1.0f;
+        if (servo_vals.left_value > 1.0f) servo_vals.left_value = 1.0f;
+        if (servo_vals.right_value < -1.0f) servo_vals.right_value = -1.0f;
+        if (servo_vals.right_value > 1.0f) servo_vals.right_value = 1.0f;
 
-            prev_axis_0 = current_axis_0;
-            prev_axis_1 = current_axis_1;
-        }
+        pwm_control_set_servos(&g_pwm, &servo_vals);
+
+        prev_axis_0 = current_axis_0;
+        prev_axis_1 = current_axis_1;
 
         // Update GPIO devices if state changed
+
         if (current_lebidka != prev_lebidka) {
             gpio_control_lebidka(&g_gpio, current_lebidka);
             prev_lebidka = current_lebidka;
@@ -638,45 +651,28 @@ int main(int argc, char *argv[])
     setvbuf(stdout, NULL, _IOLBF, 0);
     setvbuf(stderr, NULL, _IOLBF, 0);
 
-    // Default UDP settings
-    char udp_host[32] = UDP_SERVER_HOST; // Default from header
-    int udp_port = UDP_SERVER_PORT;      // Default from header
+    // Initialize Settings Module
+    settings_init();
+
+    // Get initial settings
+    char udp_host[64];
+    settings_get_udp_host(udp_host, sizeof(udp_host));
+    int udp_port = settings_get_udp_port();
 
     // Network Config Defaults
     network_config_t net_config;
     strcpy(net_config.eth_gateway, "192.168.2.1");
     strcpy(net_config.wg_gateway, "10.8.0.1");
-    // strcpy(net_config.operator_ip, "10.8.7.101");
     strcpy(net_config.operator_ip, "10.8.0.3");
     strcpy(net_config.dev1_ip, "10.0.7.101");
     strcpy(net_config.dev2_ip, "10.0.7.102");
     strcpy(net_config.dev3_ip, "10.0.7.103");
-
-    // Parse arguments
-    int opt;
-    while ((opt = getopt(argc, argv, "s:p:g:w:o:")) != -1) {
-        switch (opt) {
-            case 's':
-                strncpy(udp_host, optarg, sizeof(udp_host) - 1);
-                udp_host[sizeof(udp_host) - 1] = '\0';
-                break;
-            case 'p':
-                udp_port = atoi(optarg);
-                break;
-            case 'g': // Gateway for Eth
-                strncpy(net_config.eth_gateway, optarg, sizeof(net_config.eth_gateway) - 1);
-                break;
-            case 'w': // Gateway for WG
-                strncpy(net_config.wg_gateway, optarg, sizeof(net_config.wg_gateway) - 1);
-                break;
-            case 'o': // Operator IP
-                strncpy(net_config.operator_ip, optarg, sizeof(net_config.operator_ip) - 1);
-                break;
-            default:
-                fprintf(stderr, "Usage: %s [-s server_ip] [-p server_port] [-g eth_gw] [-w wg_gw] [-o op_ip]\n", argv[0]);
-                return 1;
-        }
-    }
+    
+    // Check Env for Network Config overrides
+    char *env_val;
+    if ((env_val = getenv("DRONE_ETH_GW"))) strncpy(net_config.eth_gateway, env_val, sizeof(net_config.eth_gateway)-1);
+    if ((env_val = getenv("DRONE_WG_GW"))) strncpy(net_config.wg_gateway, env_val, sizeof(net_config.wg_gateway)-1);
+    if ((env_val = getenv("DRONE_OP_IP"))) strncpy(net_config.operator_ip, env_val, sizeof(net_config.operator_ip)-1);
 
     printf("Starting drone C application (MAVLink + Web enabled)...\n");
     printf("UDP Server: %s:%d\n", udp_host, udp_port);
@@ -690,7 +686,6 @@ int main(int argc, char *argv[])
 
     if (network_monitor_init(&net_config) != 0) {
         fprintf(stderr, "Failed to initialize Network Monitor\n");
-        // We can continue without it, but it's better to warn
     }
 
     printf("Starting threads...\n");
@@ -757,9 +752,31 @@ int main(int argc, char *argv[])
     // Play startup sound
     play_buzzer_pattern((bool[]){true, false}, 2, 100);
 
-    // Main loop - just wait for exit signal
+    // Keep track of current settings to detect changes
+    char current_host[64];
+    strncpy(current_host, udp_host, sizeof(current_host));
+    int current_port = udp_port;
+
+    // Main loop
     while (running) {
         sleep(1);
+
+        // Check for settings changes (Dynamic Reconfiguration)
+        char new_host[64];
+        settings_get_udp_host(new_host, sizeof(new_host));
+        int new_port = settings_get_udp_port();
+        
+        if (strcmp(new_host, current_host) != 0 || new_port != current_port) {
+            printf("Settings changed: Reconnecting UDP to %s:%d\n", new_host, new_port);
+            
+            // Reconnect UDP
+            udp_client_cleanup(&g_udp); 
+            udp_client_init(&g_udp, new_host, new_port);
+            
+            // Update tracking
+            strncpy(current_host, new_host, sizeof(current_host));
+            current_port = new_port;
+        }
 
         // Print status every 10 seconds
         static int counter = 0;
@@ -774,16 +791,18 @@ int main(int argc, char *argv[])
             }
 
             pthread_mutex_lock(&g_control.mutex);
-            printf("Status: ARM=%s, Axis0=%.2f, Axis1=%.2f, Lebidka=%d, Aktuator=%d\n",
+            printf("Status: ARM=%s, Axis0=%.2f, Axis1=%.2f, Lebidka=%d, Aktuator=%d, Damping=%.2f\n",
                    current_heartbeat_arm_state ? "ON" : "OFF",
                    g_control.axis_0, g_control.axis_1,
-                   g_control.lebidka_state, g_control.aktuator_state);
+                   g_control.lebidka_state, g_control.aktuator_state,
+                   settings_get_steering_damping());
             pthread_mutex_unlock(&g_control.mutex);
 
-            printf("Connections: CRSF=%s, UDP=%s, Web=%s\n",
+            printf("Connections: CRSF=%s, UDP=%s, Web=%s, Host=%s:%d\n",
                    crsf_is_connected(&g_crsf) ? "OK" : "DISCONNECTED",
                    udp_client_is_connected(&g_udp) ? "OK" : "DISCONNECTED",
-                   g_web.connected ? "CONNECTED" : "WAITING");
+                   g_web.connected ? "CONNECTED" : "WAITING",
+                   current_host, current_port);
         }
     }
 

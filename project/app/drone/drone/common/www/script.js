@@ -29,7 +29,7 @@ function setConnectionStatus(text, isError = false) {
 function connectWebSocket() {
     setConnectionStatus('Підключення до WebSocket-сервера...');
     // Connect to the drone's IP on port 80 (implied)
-    ws = new WebSocket("ws://10.8.0.2");
+    ws = new WebSocket("ws://10.8.3.2");
 
     ws.onopen = () => {
         wsConnected = true;

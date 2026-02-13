@@ -12,6 +12,8 @@ set(COMMON_SOURCES
     ${PROJECT_SOURCE_DIR}/common/oled.c
     ${PROJECT_SOURCE_DIR}/common/network_monitor.c
     ${PROJECT_SOURCE_DIR}/common/linux-i2c.c
+    ${PROJECT_SOURCE_DIR}/common/cJSON.c
+    ${PROJECT_SOURCE_DIR}/common/settings.c
     # ${PROJECT_SOURCE_DIR}/common/ssd1306/intf/ssd1306_interface.c
     # ${PROJECT_SOURCE_DIR}/common/ssd1306/intf/i2c/ssd1306_i2c.c
     # ${PROJECT_SOURCE_DIR}/common/ssd1306/intf/spi/ssd1306_spi.c

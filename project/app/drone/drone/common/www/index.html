@@ -37,7 +37,7 @@
             </div>
         </div>
 
-        <!-- Блок камери REAR -->
+        <!-- Блок камери REAR
         <div class="cam-container">
             <video-stream id="rear" muted autoplay controls></video-stream>
             <div class="btn-group">
@@ -45,7 +45,7 @@
                 <button onclick="changeStream('rear', 'rear_a')">SD</button>
                 <button class="stop" onclick="stopStream('rear')">STOP</button>
             </div>
-        </div>
+        </div> -->
 
         <!-- Блок камери BACK -->
         <div class="cam-container">
@@ -113,10 +113,10 @@
     <!-- <script type="module" src="http://10.8.0.2:1984/video-rtc.js"></script> -->
     <!-- <script type="module" src="http://localhost:1984/video-rtc.js"></script> -->
 
-    <script type="module" src="http://10.8.0.2:1984/video-stream.js"></script>
+    <script type="module" src="http://10.8.3.2:1984/video-stream.js"></script>
 
 <script type="module">
-        const API_URL = 'http://10.8.0.2:1984/api/ws?src=';
+        const API_URL = 'http://10.8.3.2:1984/api/ws?src=';
 
         window.changeStream = function(elementId, streamName) {
             const el = document.getElementById(elementId);

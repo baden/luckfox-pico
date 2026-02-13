@@ -1,4 +1,6 @@
 #include "web_server.h"
+#include "cJSON.h"
+#include "settings.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,64 +38,84 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
         memcpy(buf, wm->data.buf, len);
         buf[len] = '\0';
         
-        // Parse JSON control input using standard string search
+        // Parse JSON
+        cJSON *json = cJSON_Parse(buf);
+        if (!json) return;
+
+        // 1. Handle Settings Requests
+        cJSON *get_settings = cJSON_GetObjectItem(json, "get_settings");
+        if (cJSON_IsBool(get_settings) && cJSON_IsTrue(get_settings)) {
+            char *settings_str = settings_get_json_string();
+            if (settings_str) {
+                // Wrap in "settings" key for client context if needed, or send flat
+                // sending flat {"udp_host":...}
+                mg_ws_send(c, settings_str, strlen(settings_str), WEBSOCKET_OP_TEXT);
+                free(settings_str);
+            }
+        }
+
+        cJSON *set_settings = cJSON_GetObjectItem(json, "settings");
+        if (cJSON_IsObject(set_settings)) {
+            char *settings_str = cJSON_PrintUnformatted(set_settings);
+            if (settings_str) {
+                settings_apply_json_string(settings_str);
+                free(settings_str);
+                // Optionally Ack?
+            }
+        }
+
+        // 2. Handle Control Inputs
         // Expected: {"arm":true,"a0":0.5,"a1":0.2,"a2":0.0,"a3":0.0,...}
         
-        float a0=0, a1=0, a2=0, a3=0;
-        int arm=0, disarm=0, lb=0, ak=0;
+        cJSON *item;
         
-        // A0 (Roll)
-        char* p = strstr(buf, "\"a0\":");
-        if (p) a0 = strtof(p + 5, NULL);
+        // Axes
+        item = cJSON_GetObjectItem(json, "a0");
+        if (cJSON_IsNumber(item)) server->temp_input.axes[0] = (float)item->valuedouble;
         
-        // A1 (Pitch)
-        p = strstr(buf, "\"a1\":");
-        if (p) a1 = strtof(p + 5, NULL);
+        item = cJSON_GetObjectItem(json, "a1");
+        if (cJSON_IsNumber(item)) server->temp_input.axes[1] = (float)item->valuedouble;
         
-        // A2 (Throttle)
-        p = strstr(buf, "\"a2\":");
-        if (p) a2 = strtof(p + 5, NULL);
+        item = cJSON_GetObjectItem(json, "a2");
+        if (cJSON_IsNumber(item)) server->temp_input.axes[2] = (float)item->valuedouble;
         
-        // A3 (Yaw)
-        p = strstr(buf, "\"a3\":");
-        if (p) a3 = strtof(p + 5, NULL);
+        item = cJSON_GetObjectItem(json, "a3");
+        if (cJSON_IsNumber(item)) server->temp_input.axes[3] = (float)item->valuedouble;
+
+        // Arming
+        bool armed_cmd = false;
+        bool disarmed_cmd = false;
+
+        item = cJSON_GetObjectItem(json, "arm");
+        if (cJSON_IsBool(item)) {
+            if (cJSON_IsTrue(item)) armed_cmd = true;
+            else disarmed_cmd = true; // "arm": false means disarm? 
+            // Usually UI sends "arm":true to arm, "arm":false to disarm.
+            // Existing code had "arm":false -> disarm = 1.
+        }
         
-        // ARM/DISARM
-        // Check "arm":true or "arm":false (new frontend format)
-        p = strstr(buf, "\"arm\":true");
-        if (p) arm = 1;
-        p = strstr(buf, "\"arm\":false");
-        if (p) disarm = 1; 
+        // Legacy/Alternative checks
+        if (cJSON_IsTrue(cJSON_GetObjectItem(json, "cmd_arm"))) armed_cmd = true;
+        if (cJSON_IsTrue(cJSON_GetObjectItem(json, "cmd_disarm"))) disarmed_cmd = true;
+
+        server->temp_input.cmd_arm = armed_cmd;
+        server->temp_input.cmd_disarm = disarmed_cmd;
+
+        // Aux
+        item = cJSON_GetObjectItem(json, "lb");
+        if (cJSON_IsNumber(item)) server->temp_input.lebidka_val = item->valueint;
         
-        // Legacy "cmd_arm" checks just in case
-        p = strstr(buf, "\"cmd_arm\":true");
-        if (p) arm = 1;
-        p = strstr(buf, "\"cmd_disarm\":true");
-        if (p) disarm = 1;
-        
-        // Lebidka
-        p = strstr(buf, "\"lb\":");
-        if (p) lb = atoi(p + 5);
-        
-        // Aktuator
-        p = strstr(buf, "\"ak\":");
-        if (p) ak = atoi(p + 5);
-        
-        // Update temporary input storage
-        server->temp_input.axes[0] = a0;
-        server->temp_input.axes[1] = a1;
-        server->temp_input.axes[2] = a2;
-        server->temp_input.axes[3] = a3;
-        server->temp_input.cmd_arm = (arm == 1);
-        server->temp_input.cmd_disarm = (disarm == 1);
-        server->temp_input.lebidka_val = lb;
-        server->temp_input.aktuator_val = ak;
+        item = cJSON_GetObjectItem(json, "ak");
+        if (cJSON_IsNumber(item)) server->temp_input.aktuator_val = item->valueint;
+
         server->temp_input.valid = true;
         server->temp_input.timestamp = 0; // Main loop will set time
-        
         server->has_new_input = true;
+
+        cJSON_Delete(json);
         
     } else if (ev == MG_EV_CLOSE) {
+
         // Check if any other connection is still open?
         // For simplicity, we just leave connected=true until we specifically check later,
         // or toggle it here. But iterating lists is safer in the main loop if needed.

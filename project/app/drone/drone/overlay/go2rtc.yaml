@@ -1,6 +1,6 @@
 streams:
-  front: rtsp://admin:C0pyright77@10.0.0.102:554/cam/realmonitor?channel=1&subtype=0
-  front_a: rtsp://admin:C0pyright77@10.0.0.102:554/cam/realmonitor?channel=1&subtype=1
+  front: rtsp://admin:C0pyright77@10.0.0.101:554/cam/realmonitor?channel=1&subtype=0
+  front_a: rtsp://admin:C0pyright77@10.0.0.101:554/cam/realmonitor?channel=1&subtype=1
   rear: rtsp://admin:C0pyright77@10.0.0.101:554/cam/realmonitor?channel=1&subtype=0
   rear_a: rtsp://admin:C0pyright77@10.0.0.101:554/cam/realmonitor?channel=1&subtype=1
   back: rtsp://admin:C0pyright77@10.0.0.103:554/cam/realmonitor?channel=1&subtype=0

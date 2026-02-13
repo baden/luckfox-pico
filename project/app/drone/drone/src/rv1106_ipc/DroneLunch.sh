@@ -270,7 +270,10 @@ post_chk() {
 		echo "Drone application is already running."
 	else
 		echo "Starting Drone application..."
-		/oem/usr/bin/drone 2>&1 | logger -t drone_app &
+		/oem/usr/bin/drone \
+			-s $DR_UDP_HOST \
+			-g \
+			 2>&1 | logger -t drone_app &
 	fi
 
 
