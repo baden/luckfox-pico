@@ -5,6 +5,10 @@ let reconnectTimeout = null;
 let wsConnected = false;
 let droneId = localStorage.getItem('droneId') || '';
 let currentArmChannel = localStorage.getItem('armChannel') || 'disabled';
+let isBackgroundMode = localStorage.getItem('backgroundMode') === 'true'; // Default false, explicit opt-in
+let audioContext = null;
+let backgroundInterval = null;
+let lastGameLoopTime = 0;
 
 // Status Management
 function updateSystemStatus(text, isError) {
@@ -24,6 +28,64 @@ function updateSystemStatus(text, isError) {
                 statusBar.style.display = 'none';
             }
         }, 3000);
+    }
+}
+
+// Background Keep-Alive (Audio Hack)
+function initAudioHack() {
+    if (!isBackgroundMode) return;
+    try {
+        if (!audioContext) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            
+            // Create silent oscillator to keep context alive
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            gainNode.gain.value = 0.001; // Almost silent
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.start();
+            console.log("Background Audio Hack initialized (silent oscillator running)");
+
+            // Unlock on user interaction (needed by browsers)
+            const resumeAudio = () => {
+                if (audioContext.state === 'suspended') {
+                    audioContext.resume().then(() => console.log("Audio Context Resumed"));
+                }
+                document.removeEventListener('click', resumeAudio);
+                document.removeEventListener('touchstart', resumeAudio);
+            };
+            document.addEventListener('click', resumeAudio);
+            document.addEventListener('touchstart', resumeAudio);
+        }
+    } catch (e) {
+        console.error("Audio Hack failed:", e);
+    }
+}
+
+function startBackgroundLoop() {
+    if (backgroundInterval) clearInterval(backgroundInterval);
+    if (isBackgroundMode) {
+        console.log("Starting background interval loop (50ms)");
+        backgroundInterval = setInterval(() => {
+            const now = Date.now();
+            // If main loop hasn't run in last 50ms (likely throttled), run logic manually
+            if (now - lastGameLoopTime > 50) {
+                // console.log("Background Loop Triggered");
+                runGamepadLogic(); 
+            }
+        }, 50); // Check every 50ms (20Hz fallback)
+    }
+}
+
+function stopBackgroundLoop() {
+    if (backgroundInterval) {
+        clearInterval(backgroundInterval);
+        backgroundInterval = null;
+    }
+    if (audioContext) {
+        audioContext.close();
+        audioContext = null;
     }
 }
 
@@ -470,30 +532,27 @@ function updateButtonsDisplay() {
 }
 
 // Основний цикл для опитування джойстика
-function gameLoop() {
-    // console.log("gamepad:", gamepad);
+function pollGamepads() {
     const gamepads = navigator.getGamepads();
-    // let gamepad_ = null;
     for(const gp of gamepads) {
-        // console.log("gp:", gp);
         if (gp && (gp.id.includes("Vendor: 1209 Product: 4f54") || gp.id.includes("Radiomaster TX12 Joystick"))) {
             gamepad = gp;
-            // console.log("gamepad:", gamepad);
             break;
         }
     }
-    // console.log("gamepads:", [gamepads]);
-    // if (gamepads.length > 0) {
-    //     // Ми припускаємо, що нас цікавить перший підключений джойстик
-    //     // Можливо, вам потрібно буде додати логіку для вибору конкретного джойстика за Vendor/Product ID
-    //     gamepad = gamepads[0]; // або шукати по gamepad.id, щоб знайти ваш Radiomaster
-    // } else {
-    //     gamepad = null;
-    // }
+}
 
+function runGamepadLogic() {
+    pollGamepads();
     updateGamepadStatus();
+    lastGameLoopTime = Date.now();
+}
+
+function gameLoop() {
+    runGamepadLogic();
     requestAnimationFrameId = requestAnimationFrame(gameLoop);
 }
+
 
 // Обробник події підключення джойстика
 window.addEventListener("gamepadconnected", (event) => {
@@ -560,6 +619,34 @@ document.addEventListener('DOMContentLoaded', function() {
     const closeSettings = document.getElementById('close-settings');
     const droneIdInput = document.getElementById('drone-id');
     const armChannelSelect = document.getElementById('arm-channel');
+    const backgroundModeCheck = document.getElementById('background-mode');
+
+    // Background Mode Logic
+    if (backgroundModeCheck) {
+        backgroundModeCheck.checked = isBackgroundMode;
+        
+        // Initialize if already enabled
+        if (isBackgroundMode) {
+            initAudioHack();
+            startBackgroundLoop();
+        }
+
+        backgroundModeCheck.addEventListener('change', () => {
+            isBackgroundMode = backgroundModeCheck.checked;
+            localStorage.setItem('backgroundMode', isBackgroundMode);
+            console.log("Background Mode set to:", isBackgroundMode);
+            
+            if (isBackgroundMode) {
+                initAudioHack();
+                startBackgroundLoop();
+            } else {
+                if (audioContext && audioContext.state !== 'closed') {
+                    audioContext.suspend(); // Or close
+                }
+                if (backgroundInterval) clearInterval(backgroundInterval);
+            }
+        });
+    }
 
     // Populate Arm Channel Select
     if (armChannelSelect) {
