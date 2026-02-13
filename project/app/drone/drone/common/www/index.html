@@ -198,6 +198,12 @@
                 diagBtn.classList.add('active');
             }
         });
+        
+        // Auto-close diagnostics when clicking on the overlay itself (for mobile ease of use)
+        diagOverlay.addEventListener('click', () => {
+             diagOverlay.style.display = 'none';
+             diagBtn.classList.remove('active');
+        });
 
     </script>
 </body>
