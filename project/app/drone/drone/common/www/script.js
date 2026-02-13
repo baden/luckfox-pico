@@ -407,6 +407,7 @@ function prepareData(gamepad) {
 // Змінні для керування частотою відправки
 let lastAxes = [];
 let lastButtons = [];
+let lastArmState = false;
 let lastSendTime = 0;
 const sendInterval = 1000; // 1000 мс
 
@@ -480,12 +481,20 @@ function updateGamepadStatus() {
     } else {
         // --- Virtual Joystick Logic ---
         axesToSend[0] = virtualAxes[0];
-        axesToSend[1] = virtualAxes[1];
+        axesToSend[1] = -virtualAxes[1]; // Інвертуємо Y (щоб вгору було позитивним значенням, або навпаки, як треба дрону)
+        
+        // Ensure visual matches logic (redundancy)
+        updateJoystickVisual(virtualAxes[0], virtualAxes[1]);
         
         if (isVirtualActive) {
-             setConnectionStatus('Віртуальний джойстик активний', false);
+             // Debug output to status bar
+             setConnectionStatus(`Віртуальний: X=${virtualAxes[0].toFixed(2)} Y=${virtualAxes[1].toFixed(2)}`, false);
         } else {
-             setConnectionStatus('Очікування підключення джойстика...', false);
+             // Only show waiting message if we are not "holding" a value (non-zero check?)
+             // Actually, keep it simple.
+             if (axesToSend[0] === 0 && axesToSend[1] === 0) {
+                 setConnectionStatus('Очікування підключення джойстика...', false);
+             }
         }
         
         // Use virtual switch state
@@ -506,7 +515,7 @@ function updateGamepadStatus() {
         const isNonZero = (Math.abs(virtualAxes[0]) > 0.001 || Math.abs(virtualAxes[1]) > 0.001);
         const wasNonZero = (lastAxes[0] !== 0 || lastAxes[1] !== 0);
         
-        if (isVirtualActive || isNonZero || wasNonZero) {
+        if (isVirtualActive || isNonZero || wasNonZero || armState !== lastArmState) {
              needSend = true;
         }
     }
@@ -529,6 +538,7 @@ function updateGamepadStatus() {
         
         ws.send(JSON.stringify(data));
         lastSendTime = currentTime;
+        lastArmState = armState;
         
         if (gamepad) {
              lastAxes = gamepad.axes.slice();
@@ -671,6 +681,11 @@ if (initialGamepads.length > 0) {
     updateGamepadStatus();
 }
 
+// Завжди запускаємо ігровий цикл для підтримки віртуального джойстика
+if (!requestAnimationFrameId) {
+    requestAnimationFrameId = requestAnimationFrame(gameLoop);
+}
+
 
 // Відкриття/закриття модального вікна налаштувань + LocalStorage для назви дрона
 document.addEventListener('DOMContentLoaded', function() {
@@ -766,6 +781,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
 
+    if(0){
     // Обробник кнопки перезапуску дрона
     document.getElementById('restart-drone').addEventListener('click', () => {
         if (wsConnected && ws && ws.readyState === WebSocket.OPEN) {
@@ -775,6 +791,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // alert("WebSocket не підключено. Неможливо відправити команду.");
         }
     });
+    }
 
     // Request Settings Button
     document.getElementById('refresh-settings').addEventListener('click', () => {
