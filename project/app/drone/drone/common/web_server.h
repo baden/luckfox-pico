@@ -17,6 +17,9 @@ typedef struct {
     // Aux controls
     int lebidka_val;    // -1 (up), 0, 1 (down)
     int aktuator_val;   // -1, 0, 1
+    
+    // System commands
+    bool cmd_restart;
 } web_control_input_t;
 
 typedef struct {

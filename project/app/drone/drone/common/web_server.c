@@ -108,6 +108,12 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
         item = cJSON_GetObjectItem(json, "ak");
         if (cJSON_IsNumber(item)) server->temp_input.aktuator_val = item->valueint;
 
+        // Command: restart
+        item = cJSON_GetObjectItem(json, "command");
+        if (cJSON_IsString(item) && strcmp(item->valuestring, "restart") == 0) {
+            server->temp_input.cmd_restart = true;
+        }
+
         server->temp_input.valid = true;
         server->temp_input.timestamp = 0; // Main loop will set time
         server->has_new_input = true;
@@ -165,6 +171,9 @@ void web_server_run_step(web_server_t* server, web_control_input_t* input) {
     if (server->has_new_input && input != NULL) {
         *input = server->temp_input;
         server->has_new_input = false;
+        
+        // Clear one-shot commands
+        server->temp_input.cmd_restart = false;
     }
 }
 

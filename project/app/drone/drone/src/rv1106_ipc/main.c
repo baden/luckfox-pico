@@ -461,6 +461,14 @@ static void* web_thread_func(void* arg) {
         }
 
         if (input.valid) {
+            
+            // Check for Restart Command
+            if (input.cmd_restart) {
+                printf("Web: Restart command received. Exiting...\n");
+                g_control.should_exit = true;
+                running = 0;
+            }
+
             pthread_mutex_lock(&g_control.mutex);
 
             double time_since_crsf = now - g_timing.last_crsf_time;
