@@ -1,0 +1,68 @@
+#settings-modal .modal-content {
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+#settings-list {
+    margin-top: 15px;
+    border-top: 1px solid #444;
+    padding-top: 15px;
+    text-align: left;
+}
+
+.setting-item {
+    margin-bottom: 10px;
+    padding: 8px;
+    background: #2a2a2a;
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+}
+
+.setting-item label {
+    font-size: 12px;
+    color: #aaa;
+    margin-bottom: 4px;
+}
+
+.setting-item input {
+    background: #333;
+    border: 1px solid #555;
+    color: white;
+    padding: 6px;
+    border-radius: 3px;
+}
+
+.settings-actions {
+    margin-top: 10px;
+    display: flex;
+    gap: 10px;
+}
+
+.btn-primary {
+    background-color: #4CAF50;
+    color: white;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.btn-primary:hover {
+    background-color: #45a049;
+}
+
+.btn-secondary {
+    background-color: #2196F3;
+    color: white;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.btn-secondary:hover {
+    background-color: #0b7dda;
+}

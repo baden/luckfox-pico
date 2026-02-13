@@ -26,6 +26,95 @@ function setConnectionStatus(text, isError = false) {
     statusDiv.style.color = isError ? 'red' : 'black';
 }
 
+// Global object to store current drone settings
+let droneSettings = {};
+
+function renderSettings(settings) {
+    const listDiv = document.getElementById('settings-list');
+    const saveContainer = document.getElementById('save-settings-container');
+    
+    listDiv.innerHTML = ''; // Clear current list
+    droneSettings = settings; // Store for diffing later if needed
+
+    for (const [key, value] of Object.entries(settings)) {
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'setting-item';
+
+        const label = document.createElement('label');
+        label.innerText = key;
+        label.htmlFor = 'setting-' + key;
+
+        const input = document.createElement('input');
+        input.id = 'setting-' + key;
+        input.dataset.key = key; // Store key for easy retrieval
+        
+        // Determine input type
+        if (typeof value === 'number') {
+            input.type = 'number';
+            input.step = '0.001'; // Default step, maybe refine based on key
+            if (key.includes('port')) input.step = '1';
+            
+            // Fix precision for floating point display
+            // Round to 3 decimal places and remove trailing zeros
+            if (!Number.isInteger(value)) {
+                input.value = parseFloat(value.toFixed(3));
+            } else {
+                input.value = value;
+            }
+        } else {
+            input.type = 'text';
+            input.value = value;
+        }
+
+        itemDiv.appendChild(label);
+        itemDiv.appendChild(input);
+        listDiv.appendChild(itemDiv);
+    }
+    
+    saveContainer.style.display = 'block';
+}
+
+function collectAndSendSettings() {
+    const inputs = document.querySelectorAll('#settings-list input');
+    const newSettings = {};
+    let changed = false;
+
+    inputs.forEach(input => {
+        const key = input.dataset.key;
+        let value = input.value;
+        
+        // Type conversion
+        if (input.type === 'number') {
+            value = parseFloat(value);
+        }
+        
+        // Only send changed or all? Sending subset is safer for bandwidth, 
+        // but backend applies all provided. Let's send non-nulls.
+        // For CJSON backend: {"settings": {"key": val}}
+        // Let's send everything we see in the form to ensure state consistency, 
+        // or just changed ones.
+        // Let's check diff against droneSettings
+        if (droneSettings[key] !== value) {
+            newSettings[key] = value;
+            changed = true;
+        }
+    });
+
+    if (changed) {
+        if (wsConnected) {
+            console.log("Sending settings update:", newSettings);
+            ws.send(JSON.stringify({ settings: newSettings }));
+            alert("Налаштування відправлено!");
+            // Update local cache
+            Object.assign(droneSettings, newSettings);
+        } else {
+            alert("Немає з'єднання з дроном!");
+        }
+    } else {
+        alert("Немає змін для збереження.");
+    }
+}
+
 function connectWebSocket() {
     setConnectionStatus('Підключення до WebSocket-сервера...');
     // Connect to the drone's IP on port 80 (implied)
@@ -40,6 +129,17 @@ function connectWebSocket() {
     ws.onmessage = (event) => {
         try {
             const msg = JSON.parse(event.data);
+            
+            // Check if it's a settings response (contains specific keys or simple heuristic)
+            // Backend sends flat JSON. Telemetry has 'armed', 'r', 'p'. 
+            // Settings has 'udp_host', 'steering_damping', etc.
+            
+            if (msg.udp_host !== undefined || msg.steering_damping !== undefined) {
+                console.log("Received Settings:", msg);
+                renderSettings(msg);
+                return;
+            }
+
             // console.log("Telem:", msg);
             if (msg.armed !== undefined) {
                 // Update UI with telemetry if elements exist
@@ -53,6 +153,7 @@ function connectWebSocket() {
     };
 
     ws.onclose = (event) => {
+
         wsConnected = false;
         setConnectionStatus('Втрачено зʼєднання з WebSocket. Перепідключення через 5 секунд...', true);
         if (!reconnectTimeout) {
@@ -441,6 +542,21 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             // alert("WebSocket не підключено. Неможливо відправити команду.");
         }
+    });
+
+    // Request Settings Button
+    document.getElementById('refresh-settings').addEventListener('click', () => {
+        if (wsConnected) {
+            console.log("Requesting settings...");
+            ws.send(JSON.stringify({ get_settings: true }));
+        } else {
+            alert("Немає з'єднання з дроном!");
+        }
+    });
+
+    // Save Settings Button
+    document.getElementById('save-settings').addEventListener('click', () => {
+        collectAndSendSettings();
     });
 
 });

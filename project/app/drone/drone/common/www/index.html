@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Drone Control</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="settings.css">
     <style>
                 video-rtc {
             width: 100%;
@@ -100,11 +101,33 @@
         <div id="settings-modal" class="modal" style="display:none;">
             <div class="modal-content">
                 <h2>Налаштування</h2>
-                <label for="drone-id">ID дрона:</label>
-                <input type="text" id="drone-id" name="drone-id" placeholder="Введіть ID дрона">
-                <br><br>
-                <button id="close-settings">&times; Закрити</button>
-                <button id="restart-drone" class="restart-button">Перезапустити дрон</button>
+                
+                <!-- Local Storage Settings -->
+                <div class="setting-section">
+                    <h3>Локальні (Browser)</h3>
+                    <label for="drone-id">ID дрона:</label>
+                    <input type="text" id="drone-id" name="drone-id" placeholder="Введіть ID дрона">
+                </div>
+
+                <!-- Drone Remote Settings -->
+                <div class="setting-section">
+                    <h3>Параметри Дрона</h3>
+                    <div class="settings-actions">
+                        <button id="refresh-settings" class="btn-secondary">Запросити список</button>
+                    </div>
+                    <div id="settings-list">
+                        <!-- Dynamic content here -->
+                        <span style="color:#666; font-size:12px;">Натисніть "Запросити", щоб отримати параметри</span>
+                    </div>
+                    <div class="settings-actions" id="save-settings-container" style="display:none;">
+                         <button id="save-settings" class="btn-primary">Встановити (Save)</button>
+                    </div>
+                </div>
+
+                <div class="settings-footer" style="margin-top: 20px; border-top: 1px solid #444; padding-top: 10px;">
+                    <button id="restart-drone" class="restart-button">Перезапустити дрон</button>
+                    <button id="close-settings" style="float:right;">&times; Закрити</button>
+                </div>
             </div>
         </div>
     </div>
