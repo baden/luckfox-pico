@@ -547,14 +547,32 @@ static void* control_thread_func(void* arg) {
         // Apply settings
         float damping = settings_get_steering_damping();
         float curve = settings_get_steering_damping_curve();
+
+        // Calculate absolute speed (0.0 to 1.0)
+        float speed = fabsf(current_axis_1);
+
+        // Calculate speed factor based on curve
+        // curve = 0.0 -> Linear
+        // curve > 0.0 -> Exponential (damping applies later at higher speeds)
+        // curve < 0.0 -> Logarithmic (damping applies earlier at lower speeds)
+        // We map curve (-1.0 to 1.0) to exponent (0.5 to 2.0 approx) or similar
+        // Let's use: exponent = 1.0 + curve. 
+        // If curve is 0.5, exp is 1.5. If curve is -0.5, exp is 0.5.
         
-        // Apply damping (0.0 = no damping/full steer, 1.0 = full damping/no steer)
-        float steer_factor = 1.0f - damping;
-        if (steer_factor < 0.0f) steer_factor = 0.0f;
+        float exponent = 1.0f + curve;
+        if (exponent < 0.1f) exponent = 0.1f; // Prevent negative/zero exponent issues
         
-        // Apply simple curve logic if needed (Expo)
-        // For now just linear damping
-        float effective_steering = current_axis_0 * steer_factor;
+        float speed_factor = powf(speed, exponent);
+
+        // Calculate damping multiplier
+        // At speed 0, multiplier should be 1.0 (no damping)
+        // At speed 1, multiplier should be (1.0 - damping)
+        // So we want to interpolate from 1.0 down to (1.0 - damping) based on speed_factor
+        
+        float damping_multiplier = 1.0f - (damping * speed_factor);
+
+        // Apply dynamic damping to steering
+        float effective_steering = current_axis_0 * damping_multiplier;
 
         // Calculate servo values: left = axis1 + axis0, right = axis1 - axis0
         // With damping: left = axis1 + effective_steering
