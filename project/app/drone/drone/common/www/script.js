@@ -656,8 +656,9 @@ window.addEventListener("gamepaddisconnected", (event) => {
     //     event.gamepad.index, event.gamepad.id);
     if (gamepad && gamepad.index === event.gamepad.index) {
         gamepad = null;
-        cancelAnimationFrame(requestAnimationFrameId);
-        requestAnimationFrameId = null;
+        // Не зупиняємо цикл, оскільки він потрібен для віртуального джойстика
+        // cancelAnimationFrame(requestAnimationFrameId);
+        // requestAnimationFrameId = null;
         updateGamepadStatus();
     }
 });
