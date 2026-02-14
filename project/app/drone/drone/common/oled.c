@@ -53,7 +53,7 @@ static void flush_fb(void) {
 #define flush_fb()
 #endif
 
-int oled_init(void)
+int oled_init(bool show_loading)
 {
     printf("OLED: Initializing SSD1306 display...\n");
 
@@ -86,8 +86,9 @@ int oled_init(void)
     u8g2_SetFont(&u8g2, u8g2_font_maniac_tf);
     u8g2_SetFontRefHeightText(&u8g2);
     u8g2_SetFontPosTop(&u8g2);
-    // u8g2_DrawStr(&u8g2, 0, 0, ".");
-
+    if (show_loading) {
+        u8g2_DrawStr(&u8g2, 0, 0, "Loading...");
+    }
 
     u8g2_SendBuffer(&u8g2);
     flush_fb();

@@ -19,7 +19,7 @@ typedef struct {
 } oled_status_t;
 
 // Initialize OLED display
-int oled_init(void);
+int oled_init(bool show_loading);
 void oled_deinit(void);
 void oled_clear(void);
 int oled_display(const oled_status_t* status);

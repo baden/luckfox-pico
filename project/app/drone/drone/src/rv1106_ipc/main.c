@@ -127,7 +127,7 @@ static int init_modules(const char* udp_host, int udp_port) {
     // init_modules is convenient. Let's stick to main() for network monitor since it has specific args.
 
     // Initialize OLED
-    if (oled_init() != 0) {
+    if (oled_init(true) != 0) {
         fprintf(stderr, "Failed to initialize OLED display\n");
         printf("Continuing without OLED display\n");
     }
@@ -201,7 +201,7 @@ static void* oled_thread_func(void* arg) {
             }
             
             if (!g_control.should_exit) {
-                if (oled_init() == 0) {
+                if (oled_init(false) == 0) { // Don't show "Loading..." on reconnect
                     printf("Main: OLED Re-initialized successfully\n");
                 } else {
                     fprintf(stderr, "Main: OLED Re-initialization failed\n");
