@@ -13,11 +13,12 @@ export WG_SERVER_IP="SERVER_IP_HERE"
 export WG_SERVER_PUBLIC_KEY="SERVER_PUBLIC_KEY_HERE"
 export WG_ADDRESS="10.8.0.2"
 export WG_PEER_ALLOWED_IPS="10.8.0.0"
-export WG_SUBNET="10.0.1.0"
+export WG_SUBNET="10.0.0.0"
+export WG_SUBNET_IP="10.0.0.1"
 export WG_UPLINK_IP="192.168.1.201"
 export WG_UPLINK_NET="192.168.1.0"
 export WG_UPLINK_GATE="192.168.1.1"
-export WG_MTU="1200"
+export WG_MTU="1420"
 EOF
 	echo "Error: /userdata/drone-env.sh not found. Init default settings. Please edit the file to configure VPN and drone settings."
 	exit 1
@@ -113,7 +114,7 @@ network_init() {
 		echo "[Peer]"
 		echo "# Drone (Luckfox)"
 		echo "PublicKey = $(cat $WG_PUBLIC_KEY)"
-		echo "AllowedIPs = $(cat $WG_ADDRESS)/32, $(cat $WG_SUBNET)/24"
+		echo "AllowedIPs = $WG_ADDRESS/32, $WG_SUBNET/24"
 		echo ""
 		echo "Execute on server and copy IP and key from output:"
 		echo "  cat /etc/wireguard/publickey"
@@ -145,10 +146,10 @@ network_init() {
 
 	# Set IP address
 	echo "Setting IP address $WG_ADDRESS..."
-	ip address add dev $WG_INTERFACE $WG_ADDRESS/24
+	ip address add dev $WG_INTERFACE $WG_ADDRESS/16
 
 	# Configure WireGuard with private key and peer
-	wg set $WG_INTERFACE listen-port 51820 private-key $WG_PRIVATE_KEY peer $WG_SERVER_PUBLIC_KEY allowed-ips $WG_PEER_ALLOWED_IPS/24 endpoint $WG_SERVER_IP:51820 persistent-keepalive 25
+	wg set $WG_INTERFACE listen-port 51820 private-key $WG_PRIVATE_KEY peer $WG_SERVER_PUBLIC_KEY allowed-ips $WG_PEER_ALLOWED_IPS/16 endpoint $WG_SERVER_IP:51820 persistent-keepalive 10
 	ip link set dev $WG_INTERFACE mtu $WG_MTU
 
 	# Bring interface up
@@ -156,9 +157,9 @@ network_init() {
 	ip link set up dev $WG_INTERFACE
 
 	# Add WG$WG_SUBNET/24 to eth0 for local network access
-	if ! ip addr show eth0 | grep -q "$WG_SUBNET"; then
+	if ! ip addr show eth0 | grep -q "$WG_SUBNET_IP"; then
 		echo "Adding route to local network"
-    	ip addr add $WG_SUBNET/24 dev eth0
+    	ip addr add $WG_SUBNET_IP/24 dev eth0
 	fi
 
 	# Шоб мати доступ до камер з заводськими налаштуваннями (192.168.1.108/32)
