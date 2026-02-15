@@ -12,31 +12,38 @@
 #define BUZZER_PIN_BANK          2
 #define BUZZER_PIN_GROUP         0
 #define BUZZER_PIN_NUMBER        2
-#define BUZZER_PIN_PATH          "/sys/class/gpio/gpio82"
+#define BUZZER_PIN_PATH          "/sys/class/gpio/gpio66"
+
+// OLED-power                       | 27 | GPIO2_A3
+#define OLEDVDD_PIN_BANK          2
+#define OLEDVDD_PIN_GROUP         0
+#define OLEDVDD_PIN_NUMBER        3
+#define OLEDVDD_PIN_PATH          "/sys/class/gpio/gpio67"
+
 
 // IO1 (лебідка вгору)              |  4 | GPIO1_C7
 #define IO1_PIN_BANK             1
 #define IO1_PIN_GROUP            2
 #define IO1_PIN_NUMBER           7
-#define IO1_PIN_PATH             "/sys/class/gpio/gpio71"
+#define IO1_PIN_PATH             "/sys/class/gpio/gpio55"
 
 // IO2 (лебідка вниз)               |  5 | GPIO1_C6
 #define IO2_PIN_BANK             1
 #define IO2_PIN_GROUP            2
 #define IO2_PIN_NUMBER           6
-#define IO2_PIN_PATH             "/sys/class/gpio/gpio70"
+#define IO2_PIN_PATH             "/sys/class/gpio/gpio54"
 
 // IO3 ()                           |  6 | GPIO1_C5
 #define IO3_PIN_BANK             1
 #define IO3_PIN_GROUP            2
 #define IO3_PIN_NUMBER           5
-#define IO3_PIN_PATH             "/sys/class/gpio/gpio69"
+#define IO3_PIN_PATH             "/sys/class/gpio/gpio53"
 
 // IO4                              |  7 | GPIO1_C4
 #define IO4_PIN_BANK             1
 #define IO4_PIN_GROUP            2
 #define IO4_PIN_NUMBER           4
-#define IO4_PIN_PATH             "/sys/class/gpio/gpio68"
+#define IO4_PIN_PATH             "/sys/class/gpio/gpio52"
 
 typedef struct {
     bool initialized;
@@ -72,6 +79,9 @@ int gpio_control_aktuator(gpio_control_t* gpio, aktuator_state_t state);
 
 // Control buzzer
 int gpio_control_buzzer(gpio_control_t* gpio, bool state);
+
+// Control OLED VDD
+int gpio_control_oledvdd(bool state);
 
 // Buzzer patterns
 typedef struct {

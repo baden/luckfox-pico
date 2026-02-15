@@ -4,6 +4,10 @@ export WG_INTERFACE="wg0"
 export WG_PRIVATE_KEY="/etc/wireguard/privatekey"
 export WG_PUBLIC_KEY="/etc/wireguard/publickey"
 
+DRONE_BIN="/oem/usr/bin/drone"
+UPDATE_FILE="/oem/usr/bin/drone.update"
+OLD_FILE="/oem/usr/bin/drone.old"
+
 if [ -f /userdata/drone-env.sh ]; then
 	echo "Loading environment variables from /userdata/drone-env.sh"
 	. /userdata/drone-env.sh
@@ -270,8 +274,27 @@ post_chk() {
 	if [ $? -eq 0 ]; then
 		echo "Drone application is already running."
 	else
+
+
+		# 1. Перевіряємо, чи існує файл оновлення
+		if [ -f "$UPDATE_FILE" ]; then
+			echo "Update for drone app found! Processing..."
+
+			# 2. Якщо основний бінарник вже існує, перейменовуємо його в .old
+			if [ -f "$DRONE_BIN" ]; then
+				mv -f "$DRONE_BIN" "$OLD_FILE"
+			fi
+
+			# 3. Перейменовуємо оновлення в основний бінарник
+			mv "$UPDATE_FILE" "$DRONE_BIN"
+			
+			chmod +x "$DRONE_BIN"
+			
+			echo "Update for drone app installed successfully."
+		fi
+
 		echo "Starting Drone application..."
-		/oem/usr/bin/drone \
+		$DRONE_BIN \
 			-s $DR_UDP_HOST \
 			-g \
 			 2>&1 | logger -t drone_app &

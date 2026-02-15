@@ -24,3 +24,4 @@ void oled_deinit(void);
 void oled_clear(void);
 int oled_display(const oled_status_t* status);
 void oled_draw_pixel(int x, int y, bool on);
+void oled_print_reboot(void); // New function prototype

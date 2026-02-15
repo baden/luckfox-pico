@@ -10,31 +10,37 @@
 
 // Global GPIO pins
 static gpio_pin_t buzzer_pin = {
-    .pin_number = 82,  // GPIO2_A2 = 2*32 + (0*8 + 2) = 64 + 2 = 66? Wait, let me recalc
+    .pin_number = 66,  // GPIO2_A2 = 2*32 + (0*8 + 2) = 64 + 2 = 66
+    .path = BUZZER_PIN_PATH,
+    .active_low = false
+};
+
+static gpio_pin_t oledvdd_pin = {
+    .pin_number = 67,  // GPIO2_A3 = 2*32 + (0*8 + 3) = 64 + 3 = 67
     .path = BUZZER_PIN_PATH,
     .active_low = false
 };
 
 static gpio_pin_t io1_pin = {
-    .pin_number = 71,  // GPIO1_C7 = 1*32 + (2*8 + 7) = 32 + 23 = 55? Let me recalc
+    .pin_number = 55,  // GPIO1_C7 = 1*32 + (2*8 + 7) = 32 + 23 = 55
     .path = IO1_PIN_PATH,
     .active_low = true   // Active level is LOW
 };
 
 static gpio_pin_t io2_pin = {
-    .pin_number = 70,   // GPIO1_C6 = 1*32 + (2*8 + 6) = 32 + 22 = 54? Let me recalc
+    .pin_number = 54,   // GPIO1_C6 = 1*32 + (2*8 + 6) = 32 + 22 = 54
     .path = IO2_PIN_PATH,
     .active_low = true   // Active level is LOW
 };
 
 static gpio_pin_t io3_pin = {
-    .pin_number = 69,   // GPIO1_C5 = 1*32 + (2*8 + 5) = 32 + 21 = 53? Let me recalc
+    .pin_number = 53,   // GPIO1_C5 = 1*32 + (2*8 + 5) = 32 + 21 = 53
     .path = IO3_PIN_PATH,
     .active_low = true   // Active level is LOW
 };
 
 static gpio_pin_t io4_pin = {
-    .pin_number = 68,   // GPIO1_C4 = 1*32 + (2*8 + 4) = 32 + 20 = 52? Let me recalc
+    .pin_number = 52,   // GPIO1_C4 = 1*32 + (2*8 + 4) = 32 + 20 = 52
     .path = IO4_PIN_PATH,
     .active_low = true   // Active level is LOW
 };
@@ -42,6 +48,7 @@ static gpio_pin_t io4_pin = {
 // Recalculate pin numbers properly:
 // Formula: pin = bank * 32 + (group * 8 + X)
 // GPIO2_A2: bank=2, group=0, X=2 -> pin = 2*32 + (0*8 + 2) = 64 + 2 = 66
+// GPIO2_A3: bank=2, group=0, X=2 -> pin = 2*32 + (0*8 + 3) = 64 + 2 = 67
 // GPIO1_C7: bank=1, group=2, X=7 -> pin = 1*32 + (2*8 + 7) = 32 + 23 = 55
 // GPIO1_C6: bank=1, group=2, X=6 -> pin = 1*32 + (2*8 + 6) = 32 + 22 = 54
 // GPIO1_C5: bank=1, group=2, X=5 -> pin = 1*32 + (2*8 + 5) = 32 + 21 = 53
@@ -66,14 +73,15 @@ static int calculate_gpio_pin(int bank, int group, int number) {
 
 static void correct_pin_numbers(void) {
     buzzer_pin.pin_number = calculate_gpio_pin(BUZZER_PIN_BANK, BUZZER_PIN_GROUP, BUZZER_PIN_NUMBER);
+    oledvdd_pin.pin_number = calculate_gpio_pin(OLEDVDD_PIN_BANK, OLEDVDD_PIN_GROUP, OLEDVDD_PIN_NUMBER);
     io1_pin.pin_number = calculate_gpio_pin(IO1_PIN_BANK, IO1_PIN_GROUP, IO1_PIN_NUMBER);
     io2_pin.pin_number = calculate_gpio_pin(IO2_PIN_BANK, IO2_PIN_GROUP, IO2_PIN_NUMBER);
     io3_pin.pin_number = calculate_gpio_pin(IO3_PIN_BANK, IO3_PIN_GROUP, IO3_PIN_NUMBER);
     io4_pin.pin_number = calculate_gpio_pin(IO4_PIN_BANK, IO4_PIN_GROUP, IO4_PIN_NUMBER);
     
-    printf("GPIO: Pin numbers - Buzzer:%d, IO1:%d, IO2:%d, IO3:%d, IO4:%d\n",
-           buzzer_pin.pin_number, io1_pin.pin_number, io2_pin.pin_number, 
-           io3_pin.pin_number, io4_pin.pin_number);
+    // printf("GPIO: Pin numbers - Buzzer:%d, IO1:%d, IO2:%d, IO3:%d, IO4:%d\n",
+    //        buzzer_pin.pin_number, io1_pin.pin_number, io2_pin.pin_number, 
+    //        io3_pin.pin_number, io4_pin.pin_number);
 }
 
 static int gpio_export(int pin_number) {
@@ -192,6 +200,7 @@ int gpio_control_init(gpio_control_t* gpio) {
     
     // Export GPIO pins
     gpio_export(buzzer_pin.pin_number);
+    gpio_export(oledvdd_pin.pin_number);
     gpio_export(io1_pin.pin_number);
     gpio_export(io2_pin.pin_number);
     gpio_export(io3_pin.pin_number);
@@ -202,6 +211,7 @@ int gpio_control_init(gpio_control_t* gpio) {
     
     // Set directions
     gpio_set_direction(buzzer_pin.pin_number, true);
+    gpio_set_direction(oledvdd_pin.pin_number, true);
     gpio_set_direction(io1_pin.pin_number, true);
     gpio_set_direction(io2_pin.pin_number, true);
     gpio_set_direction(io3_pin.pin_number, true);
@@ -209,6 +219,7 @@ int gpio_control_init(gpio_control_t* gpio) {
     
     // Initialize all pins to inactive state
     gpio_write_value(buzzer_pin.pin_number, false);
+    gpio_write_value(oledvdd_pin.pin_number, false);
     gpio_write_value(io1_pin.pin_number, true);  // Active low, so inactive = true
     gpio_write_value(io2_pin.pin_number, true);  // Active low, so inactive = true
     gpio_write_value(io3_pin.pin_number, true);  // Active low, so inactive = true
@@ -245,6 +256,7 @@ void gpio_control_cleanup(gpio_control_t* gpio) {
     
     // Turn off all outputs
     gpio_write_value(buzzer_pin.pin_number, false);
+    //gpio_write_value(oledvdd_pin.pin_number, false);
     gpio_write_value(io1_pin.pin_number, true);  // Active low, so inactive = true
     gpio_write_value(io2_pin.pin_number, true);  // Active low, so inactive = true
     gpio_write_value(io3_pin.pin_number, true);  // Active low, so inactive = true
@@ -322,6 +334,10 @@ int gpio_control_buzzer(gpio_control_t* gpio, bool state) {
     }
     
     return gpio_write_value(buzzer_pin.pin_number, state);
+}
+
+int gpio_control_oledvdd(bool state) {
+    return gpio_write_value(oledvdd_pin.pin_number, state);
 }
 
 int gpio_buzzer_play_pattern(gpio_control_t* gpio, const buzzer_pattern_t* pattern) {

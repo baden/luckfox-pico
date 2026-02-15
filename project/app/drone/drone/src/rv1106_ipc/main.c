@@ -125,12 +125,12 @@ static int init_modules(const char* udp_host, int udp_port) {
     // For now, I'll modify init_modules to take the config if I can, OR just init it in main.
     // Let's init it in main() before creating threads, to keep init_modules clean or add it there.
     // init_modules is convenient. Let's stick to main() for network monitor since it has specific args.
-
     // Initialize OLED
-    if (oled_init(true) != 0) {
-        fprintf(stderr, "Failed to initialize OLED display\n");
-        printf("Continuing without OLED display\n");
-    }
+    // if (oled_init(true) != 0) {
+    //     fprintf(stderr, "Failed to initialize OLED display\n");
+    //     printf("Continuing without OLED display\n");
+    // }
+    // usleep(1000000); // 1sec
 
     printf("All modules initialized successfully\n");
     return 0;
@@ -141,6 +141,7 @@ static int init_modules(const char* udp_host, int udp_port) {
 static void cleanup_modules(void) {
     printf("Cleaning up modules...\n");
 
+    oled_deinit(); // Ensure OLED is closed
     crsf_cleanup(&g_crsf);
     udp_client_cleanup(&g_udp);
     web_server_cleanup(&g_web);
@@ -163,7 +164,15 @@ static void play_buzzer_pattern(bool* states, int count, double duration_ms) {
 // OLED reading thread
 static void* oled_thread_func(void* arg) {
     printf("OLED thread started\n");
+    usleep(500000); // 0.5sec
+
+    // Initialize OLED
+    if (oled_init(true) != 0) {
+        fprintf(stderr, "Failed to initialize OLED display\n");
+        printf("Continuing without OLED display\n");
+    }
     usleep(1000000); // 1sec
+
     while (!g_control.should_exit) {
         double now = get_time_seconds();
 
@@ -193,6 +202,7 @@ static void* oled_thread_func(void* arg) {
         if (oled_display(&status) != 0) {
             fprintf(stderr, "Main: OLED Display Failed. Restarting OLED subsystem in 10s...\n");
             oled_deinit();
+            gpio_control_oledvdd(false);
             
             // Wait 10 seconds before retrying (check exit flag periodically)
             for (int i = 0; i < 100; i++) {
@@ -212,7 +222,7 @@ static void* oled_thread_func(void* arg) {
         }
     }
     printf("OLED thread exiting\n");
-    oled_deinit(); // Clean up on exit
+    // oled_deinit(); // Clean up on exit -- MOVED to cleanup_modules or handled by main after Reboot msg
     return NULL;
 }
 
@@ -856,8 +866,19 @@ int main(int argc, char *argv[])
     // Signal threads to exit
     g_control.should_exit = true;
 
-    // Wait for all threads to finish
+    // Display Reboot message immediately (before threads completely stop)
+    // We do this here because oled_thread will exit quickly after should_exit is set
+    // But we might race with it. 
+    // Actually, let's let oled_thread handle it or do it after join?
+    // If we do it after join, it's safe.
+    
+    // Wait for OLED thread first to ensure it stops updating
     pthread_join(oled_thread, NULL);
+    
+    // Now valid to draw "Reboot..."
+    oled_print_reboot();
+
+    // Wait for other threads
     pthread_join(crsf_thread, NULL);
     pthread_join(udp_thread, NULL);
     pthread_join(web_thread, NULL);

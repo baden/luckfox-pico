@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "oled.h"
+#include "gpio_control.h"
 #include "linux-i2c.h"
 // #include "ssd1306.h"
 // #include "ssd1306_fonts.h"
@@ -57,9 +58,13 @@ int oled_init(bool show_loading)
 {
     printf("OLED: Initializing SSD1306 display...\n");
 
+    gpio_control_oledvdd(true);
+    usleep(500000); // 0.5sec
+
     #if defined(U8G2_USE_LINUX_I2C) && U8G2_USE_LINUX_I2C == 1
     // u8g2_Setup_ssd1306_i2c_128x32_univision_2(&u8g2, U8G2_R0, u8x8_byte_linux_i2c, u8x8_linux_i2c_delay);
     u8g2_Setup_ssd1306_i2c_128x32_univision_f(&u8g2, U8G2_R0, u8x8_byte_linux_i2c, u8x8_linux_i2c_delay);
+    // u8g2_Setup_ssd1306_i2c_128x32_winstar_f(&u8g2, U8G2_R0, u8x8_byte_linux_i2c, u8x8_linux_i2c_delay);
     u8g2_SetI2CAddress(&u8g2, SSD1306_ADDR /*<< 1*/); // Shift address for 7-bit ?
     #endif
 
@@ -81,6 +86,11 @@ int oled_init(bool show_loading)
     #endif
 
     u8g2_InitDisplay(&u8g2);
+
+    // u8x8_cad_SendCmd(&u8g2.u8x8, 0xAF); // Примусово Display ON
+    // u8x8_cad_SendCmd(&u8g2.u8x8, 0xA5); // All Pixels ON (для тесту)
+    // usleep(100000); // 0.1sec
+
     u8g2_SetPowerSave(&u8g2, 0); // Wake up display
     u8g2_ClearBuffer(&u8g2);
     u8g2_SetFont(&u8g2, u8g2_font_maniac_tf);
@@ -256,4 +266,21 @@ int oled_display(const oled_status_t* status)
         return -1;
     }
     return 0;
+}
+
+void oled_print_reboot(void) {
+    if (linux_i2c_get_error()) return; // Don't try if already failed
+
+    u8g2_ClearBuffer(&u8g2);
+    u8g2_SetFont(&u8g2, u8g2_font_profont17_tf);
+    u8g2_SetFontRefHeightText(&u8g2);
+    u8g2_SetFontPosTop(&u8g2);
+    
+    // Center "Reboot..."
+    // Display is 128x32.
+    // Font height approx 12-14.
+    u8g2_DrawStr(&u8g2, 10, 8, "Reboot...");
+
+    u8g2_SendBuffer(&u8g2);
+    flush_fb();
 }
