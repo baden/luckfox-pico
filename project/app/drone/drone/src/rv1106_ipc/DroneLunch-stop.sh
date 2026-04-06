@@ -25,7 +25,8 @@ rcK()
 }
 
 echo "Stop Application ..."
-killall drone
+killall drone || true
+killall luckdrone || true
 
 while [ 1 ];
 do

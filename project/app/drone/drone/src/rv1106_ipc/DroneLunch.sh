@@ -1,73 +1,77 @@
 #!/bin/sh
 
-export WG_INTERFACE="wg0"
 export WG_PRIVATE_KEY="/etc/wireguard/privatekey"
 export WG_PUBLIC_KEY="/etc/wireguard/publickey"
 
-DRONE_BIN="/oem/usr/bin/drone"
-UPDATE_FILE="/oem/usr/bin/drone.update"
-OLD_FILE="/oem/usr/bin/drone.old"
+# TODO: New luckdrone binary for better performance and stability. For now, we keep the old one for compatibility.
+#DRONE_PROCESS_NAME="drone"
+#DRONE_BIN="/oem/usr/bin/drone"
+#UPDATE_FILE="/oem/usr/bin/drone.update"
+#OLD_FILE="/oem/usr/bin/drone.old"
 
-if [ -f /userdata/drone-env.sh ]; then
-	echo "Loading environment variables from /userdata/drone-env.sh"
-	. /userdata/drone-env.sh
+DRONE_PROCESS_NAME="luckdrone"
+DRONE_PATH="/root"
+DRONE_BIN="/root/luckdrone"
+UPDATE_FILE="/root/luckdrone.update"
+OLD_FILE="/root/luckdrone.old"
+
+if [ -f /oem/usr/share/drone-env.sh ]; then
+	echo "Loading environment variables from /oem/usr/share/drone-env.sh"
+	. /oem/usr/share/drone-env.sh
 else
-		cat >/userdata/drone-env.sh <<EOF
-export WG_SERVER_IP="SERVER_IP_HERE"
-export WG_SERVER_PUBLIC_KEY="SERVER_PUBLIC_KEY_HERE"
-export WG_ADDRESS="10.8.0.2"
-export WG_PEER_ALLOWED_IPS="10.8.0.0"
-export WG_SUBNET="10.0.0.0"
-export WG_SUBNET_IP="10.0.0.1"
-export WG_UPLINK_IP="192.168.1.201"
-export WG_UPLINK_NET="192.168.1.0"
-export WG_UPLINK_GATE="192.168.1.1"
-export WG_MTU="1420"
-EOF
-	echo "Error: /userdata/drone-env.sh not found. Init default settings. Please edit the file to configure VPN and drone settings."
+	echo "Error: /oem/usr/share/drone-env.sh not found."
 	exit 1
 fi
 
 
-rcS() {
-	for i in /oem/usr/etc/init.d/S??*; do
-
-		# Ignore dangling symlinks (if any).
-		[ ! -f "$i" ] && continue
-
-		case "$i" in
-		*.sh)
-			# Source shell script for speed.
-			(
-				trap - INT QUIT TSTP
-				set start
-				. $i
-			)
-			;;
-		*)
-			# No sh extension, so fork subprocess.
-			$i start
-			;;
-		esac
-	done
-}
-
-# Function to check if interface exists
+# Function to check if Wireguard interface exists
 interface_exists() {
-    ip link show $WG_INTERFACE >/dev/null 2>&1
+    ip link show wg0 >/dev/null 2>&1
 }
 
-# Function to check if interface is up
+# Function to check if Wireguard interface is up
+# Це не працює для Wireguard бо він не має стану "up" як звичайні інтерфейси, тому поки що не використовуємо цю функцію.
 interface_is_up() {
-    [ -d /sys/class/net/$WG_INTERFACE ] && [ "$(cat /sys/class/net/$WG_INTERFACE/operstate)" = "up" ]
+    [ -d /sys/class/net/wg0 ] && [ "$(cat /sys/class/net/wg0/operstate)" = "up" ]
 }
 
 check_linker() {
 	[ ! -L "$2" ] && ln -sf $1 $2
 }
 
-network_init() {
-	echo "Initializing VPN network..."
+wg_help() {
+	echo "Error: WireGuard keys not found."
+	# Generate keys if they don't exist
+	# cd /etc/wireguard
+	umask 077
+	wg genkey | tee $WG_PRIVATE_KEY | wg pubkey > $WG_PUBLIC_KEY
+	echo "======================================================================"
+	echo "Generated WireGuard keys. Please configure the VPN settings on server."
+	#echo "Drone public key:"
+	#cat $WG_PUBLIC_KEY
+	echo "Go to server and add a new peer with the following configuration."
+	echo " vi /etc/wireguard/wg0.conf"
+	echo "Edit/Add the following peer configuration:"
+	echo ""
+	echo "[Peer]"
+	echo "# Drone (Luckfox)"
+	echo "PublicKey = $(cat $WG_PUBLIC_KEY)"
+	echo "AllowedIPs = $WG_ADDRESS/32, $WG_SUBNET/24"
+	echo ""
+	echo "Execute on server and copy IP and key from output:"
+	echo "  cat /etc/wireguard/publickey"
+	echo "  ip addr|grep eth0"
+	echo "  systemctl restart wg-quick@wg0.service"
+	echo ""
+	echo "Then update the WG_SERVER_IP and WG_SERVER_PUBLIC_KEY variables in this script."
+	echo "  vi /userdata/drone-env.sh"
+	echo "Then restart the drone or execute the script again."
+	echo "  /etc/init.d/S21appinit start"
+	echo "======================================================================"
+}
+
+setup_eth0() {
+	# ifconfig eth0 up && udhcpc -i eth0 >/dev/null 2>&1
 
 	# TODO: What is this for?
 	ethaddr1=$(ifconfig -a | grep "eth.*HWaddr" | awk '{print $5}')
@@ -86,50 +90,37 @@ network_init() {
 
 	#ifconfig eth0 up && udhcpc -i eth0 >/dev/null 2>&1
 
-	ifconfig eth0 $WG_UPLINK_IP netmask 255.255.255.0
-	route add default gw $WG_UPLINK_GATE
+	if [ "$WG_LOCAL" = "yes" ]; then
+		ifconfig eth0 192.168.1.207 netmask 255.255.255.0
+		route add default gw 192.168.1.1
 
-	ifconfig eth0:0 192.168.3.222 netmask 255.255.255.0
-	route add default gw 192.168.3.1
+		#ifconfig eth0:0 192.168.3.222 netmask 255.255.255.0
+		#route add default gw 192.168.3.1
+	else
+		# Wireguard on router, just get IP for VPN
+		ifconfig eth0 10.8.$DRONE_ID.2 netmask 255.255.0.0
+		route add default gw 10.8.$DRONE_ID.1
+	fi
+
+	cat > /etc/resolv.conf <<EOF
+nameserver 8.8.8.8
+nameserver 8.8.4.4
+EOF
+
+}
+
+setup_wireguard() {
 
 	# Check if WireGuard interface already exists
 	if interface_exists; then
-		echo "WireGuard interface $WG_INTERFACE already exists."
+		echo "WireGuard interface wg0 already exists."
 		# Do nothing if it exists
 		return
 	fi
 
 	# Check if private and public keys exist
 	if [ ! -f "$WG_PRIVATE_KEY" ] || [ ! -f "$WG_PUBLIC_KEY" ]; then
-		echo "Error: WireGuard keys not found."
-
-		# Generate keys if they don't exist
-		# cd /etc/wireguard
-		umask 077
-		wg genkey | tee $WG_PRIVATE_KEY | wg pubkey > $WG_PUBLIC_KEY
-		echo "======================================================================"
-		echo "Generated WireGuard keys. Please configure the VPN settings on server."
-		#echo "Drone public key:"
-		#cat $WG_PUBLIC_KEY
-		echo "Go to server and add a new peer with the following configuration."
-		echo " vi /etc/wireguard/wg0.conf"
-		echo "Edit/Add the following peer configuration:"
-		echo ""
-		echo "[Peer]"
-		echo "# Drone (Luckfox)"
-		echo "PublicKey = $(cat $WG_PUBLIC_KEY)"
-		echo "AllowedIPs = $WG_ADDRESS/32, $WG_SUBNET/24"
-		echo ""
-		echo "Execute on server and copy IP and key from output:"
-		echo "  cat /etc/wireguard/publickey"
-		echo "  ip addr|grep eth0"
-		echo "  systemctl restart wg-quick@wg0.service"
-		echo ""
-		echo "Then update the WG_SERVER_IP and WG_SERVER_PUBLIC_KEY variables in this script."
-		echo "  vi /userdata/drone-env.sh"
-		echo "Then restart the drone or execute the script again."
-		echo "  /etc/init.d/S21appinit start"
-		echo "======================================================================"
+		wg_help
 		return 1
 	fi
 
@@ -145,25 +136,31 @@ network_init() {
 		return 1
 	fi
 
-	echo "Creating WireGuard interface $WG_INTERFACE..."
-	ip link add dev $WG_INTERFACE type wireguard
+	echo "Creating WireGuard interface wg0..."
+	ip link add dev wg0 type wireguard
 
 	# Set IP address
-	echo "Setting IP address $WG_ADDRESS..."
-	ip address add dev $WG_INTERFACE $WG_ADDRESS/16
+	echo "Setting IP address $WG_NET.$DRONE_ID.2..."
+	ip address add dev wg0 $WG_NET.$DRONE_ID.2/16
 
 	# Configure WireGuard with private key and peer
-	wg set $WG_INTERFACE listen-port 51820 private-key $WG_PRIVATE_KEY peer $WG_SERVER_PUBLIC_KEY allowed-ips $WG_PEER_ALLOWED_IPS/16 endpoint $WG_SERVER_IP:51820 persistent-keepalive 10
-	ip link set dev $WG_INTERFACE mtu $WG_MTU
+	wg set wg0 \
+		listen-port 51820 \
+		private-key $WG_PRIVATE_KEY \
+		peer $WG_SERVER_PUBLIC_KEY \
+		allowed-ips $WG_NET.0.0/16 \
+		endpoint $WG_SERVER_IP:51820 \
+		persistent-keepalive 25
+	ip link set dev wg0 mtu $WG_MTU
 
 	# Bring interface up
-	echo "Bringing up interface $WG_INTERFACE..."
-	ip link set up dev $WG_INTERFACE
+	echo "Bringing up interface wg0..."
+	ip link set up dev wg0
 
-	# Add WG$WG_SUBNET/24 to eth0 for local network access
-	if ! ip addr show eth0 | grep -q "$WG_SUBNET_IP"; then
+	# Add 10.0.x.0/24 to eth0 for local network access to cameras
+	if ! ip addr show eth0 | grep -q "10.0.$DRONE_ID.1"; then
 		echo "Adding route to local network"
-    	ip addr add $WG_SUBNET_IP/24 dev eth0
+    	ip addr add 10.0.$DRONE_ID.1/24 dev eth0
 	fi
 
 	# Шоб мати доступ до камер з заводськими налаштуваннями (192.168.1.108/32)
@@ -182,50 +179,40 @@ network_init() {
 
 	# 2. Дозволяємо вхідний трафік для go2rtc (на самому Luckfox) через VPN
 	# Порти: 1984 (API/Web), 8554 (RTSP), 8555 (WebRTC UDP/TCP)
-	iptables -I INPUT -i $WG_INTERFACE -p tcp -m multiport --dports 1984,8554,8555 -j ACCEPT
-	iptables -I INPUT -i $WG_INTERFACE -p udp --dport 8555 -j ACCEPT
-	# iptables -A INPUT -i $WG_INTERFACE -p tcp --dport 1984 -j ACCEPT
-	# iptables -A INPUT -i $WG_INTERFACE -p tcp --dport 8554 -j ACCEPT
-	# iptables -A INPUT -i $WG_INTERFACE -p tcp --dport 8555 -j ACCEPT
-	# iptables -A INPUT -i $WG_INTERFACE -p udp --dport 8555 -j ACCEPT
+	iptables -I INPUT -i wg0 -p tcp -m multiport --dports 1984,8554,8555 -j ACCEPT
+	iptables -I INPUT -i wg0 -p udp --dport 8555 -j ACCEPT
 
 	# 3. NAT для виходу в інтернет через VPN (якщо потрібно для самого Luckfox)
-	iptables -t nat -A POSTROUTING -o $WG_INTERFACE -j MASQUERADE
-	iptables -t nat -A POSTROUTING -o eth0 -d $WG_UPLINK_NET/24 -j MASQUERADE
-	iptables -t nat -A POSTROUTING -o eth0 -d $WG_SUBNET/24 -j MASQUERADE
+	iptables -t nat -A POSTROUTING -o wg0 -j MASQUERADE
+	iptables -t nat -A POSTROUTING -o eth0 -d 192.168.1.0/24 -j MASQUERADE
+	iptables -t nat -A POSTROUTING -o eth0 -d 10.0.$DRONE_ID.0/24 -j MASQUERADE
 
 	# 4. Forwarding: Дозволяємо клієнтам з VPN бачити камери
-	iptables -A FORWARD -i $WG_INTERFACE -o eth0 -j ACCEPT
+	iptables -A FORWARD -i wg0 -o eth0 -j ACCEPT
 	# Дозволяємо відповіді від камер у VPN
-	iptables -A FORWARD -i eth0 -o $WG_INTERFACE -m state --state RELATED,ESTABLISHED -j ACCEPT
+	iptables -A FORWARD -i eth0 -o wg0 -m state --state RELATED,ESTABLISHED -j ACCEPT
 
 	# Підрізаємо пакети TCP до максимальної величини, щоб уникнути фрагментації
  	iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
 
-	# 5. Forwarding: Дозволяємо відповіді від камер іти в VPN
-	# Попрередньє правиль вже це дозволяє?
-	# iptables -A FORWARD -i eth0 -o $WG_INTERFACE -m state --state RELATED,ESTABLISHED -j ACCEPT
-
-	# iptables -A FORWARD -i eth0 -o $WG_INTERFACE -j ACCEPT
-	# iptables -A FORWARD -i wg0 -m state --state RELATED,ESTABLISHED -j ACCEPT
-	# чи це треба?
-	# iptables -A FORWARD -i $WG_INTERFACE -o eth0 -m state --state RELATED,ESTABLISHED -j ACCEPT
-
-	# 6. БЛОКУВАННЯ: камери НЕ можуть ходити в інтернет через Luckfox
-	# (дозволяємо їм тільки спілкування з VPN мережею, все інше DROP)
-	# Поки залишаємо, ще перевіримо роботу RTMP.
-	# iptables -A FORWARD -i eth0 -s 10.0.0.0/24 ! -d 10.8.0.0/24 -j DROP
-
-	# Якшо треба буде обмежити роботу тільки одним IP
-	# iptables -t nat -A POSTROUTING -o eth0 -d 192.168.1.0/24 -j MASQUERADE
- 	# iptables -A FORWARD -i wg0 -o eth0 -d 192.168.1.108 -j ACCEPT
- 	# iptables -A FORWARD -i eth0 -o wg0 -m state --state RELATED,ESTABLISHED -j ACCEPT
-
+	# Tune network parameters for better performance
 	# Set txqueuelen to 5000 for better performance
-	tc qdisc add dev eth0 root fq_codel
 	tc qdisc add dev wg0 root fq_codel limit 1000 target 5ms interval 100ms
-	ifconfig eth0 txqueuelen 5000
 	ifconfig wg0 txqueuelen 5000
+}
+
+network_init() {
+	echo "Initializing VPN network..."
+
+	setup_eth0
+
+	if [ "$WG_LOCAL" = "yes" ]; then
+		setup_wireguard
+	fi
+
+	# Tune network parameters for better performance
+	tc qdisc add dev eth0 root fq_codel
+	ifconfig eth0 txqueuelen 5000
 	sysctl -w net.core.rmem_max=2097152
 	sysctl -w net.core.wmem_max=2097152
 
@@ -270,11 +257,10 @@ post_chk() {
 
 
 	# Check if drone is already running
-	pidof drone >/dev/null 2>&1
+	pidof $DRONE_PROCESS_NAME >/dev/null 2>&1
 	if [ $? -eq 0 ]; then
 		echo "Drone application is already running."
 	else
-
 
 		# 1. Перевіряємо, чи існує файл оновлення
 		if [ -f "$UPDATE_FILE" ]; then
@@ -294,25 +280,37 @@ post_chk() {
 		fi
 
 		echo "Starting Drone application..."
-		$DRONE_BIN \
-			-s $DR_UDP_HOST \
-			-g \
-			 2>&1 | logger -t drone_app &
+		cd $DRONE_PATH
+		rm -f /tmp/no_drone_reboot
+		(
+			$DRONE_BIN \
+				-s $DR_UDP_HOST \
+				-g \
+				 2>&1 | logger -t drone_app
+			
+			if [ ! -f /tmp/no_drone_reboot ]; then
+				echo "CRITICAL: Drone application terminated! Rebooting device in 3 seconds..." | logger -t drone_app
+				sleep 3
+				reboot
+			else
+				echo "Drone stopped intentionally. Skipping reboot." | logger -t drone_app
+				rm -f /tmp/no_drone_reboot
+			fi
+		) &
 	fi
 
-
-	pidof go2rtc >/dev/null 2>&1
-	if [ $? -eq 0 ]; then
-		echo "go2rtc is already running."
-	else
-		echo "Starting go2rtc..."
-		export GOGC=20
-        export GOMEMLIMIT=50MiB
-		go2rtc -c /oem/usr/share/go2rtc.yaml 2>&1 | logger -t go2rtc &
-	fi
+	# pidof go2rtc >/dev/null 2>&1
+	# if [ $? -eq 0 ]; then
+	# 	echo "go2rtc is already running."
+	# else
+	# 	echo "Starting go2rtc..."
+	# 	export GOGC=20
+    #     export GOMEMLIMIT=50MiB
+	# 	go2rtc -c /oem/usr/share/go2rtc.yaml 2>&1 | logger -t go2rtc &
+	# fi
 }
 
-rcS
+#rcS
 
 ulimit -c unlimited
 echo "/data/core-%p-%e" >/proc/sys/kernel/core_pattern

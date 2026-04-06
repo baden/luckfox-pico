@@ -43,7 +43,8 @@ if(COMPILE_FOR_RV1106_IPC)
   add_subdirectory(src/rv1106_ipc)
 endif()
 
-install(FILES ${PROJECT_SOURCE_DIR}/overlay/go2rtc.yaml DESTINATION share)
+#install(FILES ${PROJECT_SOURCE_DIR}/overlay/go2rtc.yaml DESTINATION share)
+install(DIRECTORY ${PROJECT_SOURCE_DIR}/overlay/share/ DESTINATION share)
 
 #install(FILES ${PROJECT_SOURCE_DIR}/common/www/index.html DESTINATION share/drone/www)
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/common/www/
