@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="uk" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Luckdrone Config</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        slate: {
+                            50: '#f8fafc',
+                            100: '#f1f5f9',
+                            200: '#e2e8f0',
+                            300: '#cbd5e1',
+                            400: '#94a3b8',
+                            500: '#64748b',
+                            600: '#475569',
+                            700: '#334155',
+                            800: '#1e293b',
+                            900: '#0f172a',
+                            950: '#020617',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbar for webkit to match dark theme */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569; 
+        }
+        /* Style for inputs to remove spinners */
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+        /* Fallback input styles */
+        input[type=number], input[type=text] {
+            background-color: #1e293b !important;
+            color: white !important;
+            border: 1px solid #475569 !important;
+        }
+        input::placeholder {
+            color: #64748b !important;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-200 font-sans antialiased min-h-screen selection:bg-blue-500/30">
+    <div class="max-w-4xl mx-auto px-4 py-8 space-y-6">
+        <header class="pb-4 border-b border-slate-800">
+            <h1 class="text-3xl font-bold tracking-tight text-white flex items-center gap-3">
+                <svg class="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                Drone Settings
+            </h1>
+        </header>
+        
+        <div class="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl p-6 shadow-xl">
+            <h2 class="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                Drone Information
+            </h2>
+            <div id="drone-info" class="text-slate-300 space-y-2 bg-slate-900/50 p-4 rounded-lg border border-slate-700/30">Loading...</div>
+        </div>
+
+        <div class="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl p-6 shadow-xl">
+            <h2 class="text-xl font-semibold text-white mb-5 flex items-center gap-2">
+                <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
+                Control Settings
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div>
+                    <label for="input-curve" class="block text-sm font-medium text-slate-400 mb-1.5">Curve (0.0 - 1.0):</label>
+                    <input type="number" id="input-curve" step="0.01" min="0" max="1" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-colors">
+                </div>
+                <div>
+                    <label for="input-damping" class="block text-sm font-medium text-slate-400 mb-1.5">Damping (0.0 - 1.0):</label>
+                    <input type="number" id="input-damping" step="0.01" min="0" max="1" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-colors">
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <button id="btn-save-config" class="bg-blue-600 hover:bg-blue-500 text-white font-medium py-2.5 px-6 rounded-lg transition-colors focus:ring-4 focus:ring-blue-500/30">
+                    Save Control Settings
+                </button>
+                <div id="config-status" class="text-sm font-medium"></div>
+            </div>
+        </div>
+
+        <div class="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl p-6 shadow-xl">
+            <h2 class="text-xl font-semibold text-white mb-5 flex items-center gap-2">
+                <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg>
+                Network Settings
+            </h2>
+            <div class="space-y-5 mb-6">
+                <div>
+                    <label for="input-mavlink" class="block text-sm font-medium text-slate-400 mb-1.5">MAVLink Connection String:</label>
+                    <input type="text" id="input-mavlink" placeholder="For example: udpout:10.8.0.2:14550" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-colors font-mono text-sm">
+                </div>
+                <div>
+                    <label for="input-stream" class="block text-sm font-medium text-slate-400 mb-1.5">Stream Video Dest:</label>
+                    <input type="text" id="input-stream" placeholder="For example: 10.8.0.2:5000" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-colors font-mono text-sm">
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <button id="btn-save-network" class="bg-blue-600 hover:bg-blue-500 text-white font-medium py-2.5 px-6 rounded-lg transition-colors focus:ring-4 focus:ring-blue-500/30">
+                    Save Network
+                </button>
+                <div id="network-status" class="text-sm font-medium"></div>
+            </div>
+            <div id="reboot-warning" class="hidden mt-4 p-3 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-lg text-sm font-medium flex items-center gap-2">
+                <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                The changes will take effect after rebooting the drone. Click reboot.
+            </div>
+        </div>
+
+        <div class="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl p-6 shadow-xl">
+            <h2 class="text-xl font-semibold text-white mb-5 flex items-center gap-2">
+                <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                ADC Settings
+            </h2>
+            <div id="adc-channels-container" class="space-y-4 mb-6">
+                <!-- Content is generated dynamically -->
+                <div class="text-slate-500 italic text-sm py-2">Loading ADC channels...</div>
+            </div>
+            <div class="flex items-center gap-4">
+                <button id="btn-save-adc" class="bg-blue-600 hover:bg-blue-500 text-white font-medium py-2.5 px-6 rounded-lg transition-colors focus:ring-4 focus:ring-blue-500/30">
+                    Save ADC
+                </button>
+                <div id="adc-status" class="text-sm font-medium"></div>
+            </div>
+        </div>
+
+        <div class="bg-red-900/20 backdrop-blur-sm border border-red-500/30 rounded-xl p-6 shadow-xl">
+            <h2 class="text-xl font-semibold text-red-400 mb-4 flex items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                Drone Control
+            </h2>
+            <p class="text-slate-400 text-sm mb-4">This action will perform a graceful shutdown of all drone processes.</p>
+            <button id="btn-reboot" class="bg-red-600 hover:bg-red-500 text-white font-medium py-2.5 px-6 rounded-lg transition-colors focus:ring-4 focus:ring-red-500/30 flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                Reboot Drone
+            </button>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

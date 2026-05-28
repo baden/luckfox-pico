@@ -1,0 +1,138 @@
+# Drone Identifier (1-255)
+drone_id = 222
+
+[api]
+enabled = true
+bind_address = "0.0.0.0:8080"
+
+[reconnect]
+# Delay between reconnection attempts (seconds)
+initial_delay = 1
+# Maximum delay between attempts (seconds)
+max_delay = 30
+# Use exponential backoff (delay doubles each retry)
+exponential_backoff = true
+
+[test]
+# Test mode: generate fake packets locally instead of connecting to RTSP
+enabled = false
+# Packet size in bytes
+packet_size = 1200
+# Packets per second to generate
+pps = 40
+# Destination IP:port
+dest = "192.168.1.24:5600"
+
+[mavlink]
+connection_string = "udpout:10.8.222.224:14550"
+system_id = 3
+component_id = 1
+
+[crsf]
+device = "/dev/ttyS3"
+baudrate = 420000
+
+[display]
+i2c_bus = 3
+i2c_addr = 0x3C
+width = 128
+height = 32
+
+[network]
+interface = "eth0"
+router_ip = "192.168.1.1"
+vpn_ip = "10.0.0.1"
+check_vpn = true
+
+[stream]
+# TO AI: Do not remove this commented line!
+#video_dest = "192.168.1.24:5600"
+video_dest = "10.8.222.224:5600"
+# ARQ buffer time-to-live in milliseconds (how long to keep packets for retransmission)
+arq_buffer_ms = 1000
+
+[[camera.streams]]
+name = "front"
+url = "rtsp://admin:C0pyright77@10.8.222.101:554/cam/realmonitor?channel=1&subtype=0"
+eco_url = "rtsp://admin:C0pyright77@10.8.222.101:554/cam/realmonitor?channel=1&subtype=1"
+transport = "udp"
+
+[[camera.streams]]
+name = "rear"
+url = "rtsp://admin:C0pyright77@10.8.222.102:554/cam/realmonitor?channel=1&subtype=1"
+#eco_url = "rtsp://admin:C0pyright77@10.8.222.102:554/cam/realmonitor?channel=1&subtype=1"
+transport = "udp"
+
+[pwm]
+# PWM chip and channel configuration
+chip_left = 5
+channel_left = 0
+chip_right = 6
+channel_right = 0
+# Period in nanoseconds (default: 20,000,000ns = 50Hz)
+period_ns = 20000000
+# Minimum duty cycle in nanoseconds (default: 500,000ns = 0.5ms)
+min_duty_ns = 500000
+# Maximum duty cycle in nanoseconds (default: 2,500,000ns = 2.5ms)
+max_duty_ns = 2500000
+# Center duty cycle in nanoseconds (default: 1,500,000ns = 1.5ms)
+center_duty_ns = 1500000
+
+[control]
+# Control parameters
+# Curve: exponential steering curve (0.0 = linear, 1.0 = very curved)
+curve = 0.0
+# Damping: reduces steering authority at high speeds (0.0 = no damping, 1.0 = full damping)
+damping = 0.5
+
+[web]
+# Web input configuration
+enabled = true
+port = 8080
+# Timeout in milliseconds
+timeout = 1500
+
+[udp]
+# UDP input configuration  
+enabled = true
+port = 14560
+# Timeout in milliseconds  
+timeout = 1500
+# Listen interface
+listen_interface = "0.0.0.0"
+
+
+[adc]
+enabled = true
+
+#[[adc.channels]]
+#id = 0
+#scale = 48.52
+#min = 10.0
+#max = 16.8
+
+[[adc.channels]]
+id = 1
+scale = 48.52
+min = 0.0
+max = 5.0
+
+[ssl]
+enabled = true
+port = 8443
+# "self-signed" or "letsencrypt"
+cert_type = "letsencrypt"
+certs_dir = "/oem/usr/share/luckdrone/certs"
+redirect_http = false
+
+[webtransport]
+enabled = true
+telemetry_interval = 3
+
+[starlink]
+azimuth_offset = 0.0
+
+[luckgate]
+enabled = true
+url = "https://dron.navi.cc"
+interval_secs = 60

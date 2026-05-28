@@ -282,21 +282,25 @@ post_chk() {
 		echo "Starting Drone application..."
 		cd $DRONE_PATH
 		rm -f /tmp/no_drone_reboot
-		(
-			$DRONE_BIN \
-				-s $DR_UDP_HOST \
-				-g \
-				 2>&1 | logger -t drone_app
-			
-			if [ ! -f /tmp/no_drone_reboot ]; then
-				echo "CRITICAL: Drone application terminated! Rebooting device in 3 seconds..." | logger -t drone_app
-				sleep 3
-				reboot
-			else
-				echo "Drone stopped intentionally. Skipping reboot." | logger -t drone_app
-				rm -f /tmp/no_drone_reboot
-			fi
-		) &
+		if [ -f "$DRONE_BIN" ]; then
+			(
+				$DRONE_BIN \
+					-s $DR_UDP_HOST \
+					-g \
+					2>&1 | logger -t drone_app
+				
+				if [ ! -f /tmp/no_drone_reboot ]; then
+					echo "CRITICAL: Drone application terminated! Rebooting device in 3 seconds..." | logger -t drone_app
+					sleep 3
+					reboot
+				else
+					echo "Drone stopped intentionally. Skipping reboot." | logger -t drone_app
+					rm -f /tmp/no_drone_reboot
+				fi
+			) &
+		else
+			echo "No drone app."
+		fi
 	fi
 
 	# pidof go2rtc >/dev/null 2>&1
